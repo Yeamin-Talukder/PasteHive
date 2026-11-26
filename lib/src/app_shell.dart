@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 import 'history/clipboard_entry.dart';
 import 'history/clipboard_history.dart';
@@ -58,6 +60,7 @@ class AppShell {
   StreamSubscription<RemoteClip>? _remoteClips;
   final List<StreamSubscription<Object?>> _subscriptions = [];
   Future<void> _lastCapture = Future.value();
+  Future<void> _lastShare = Future.value();
   int _lastOpenCount = 0;
   bool _openingSyncSettings = false;
 
@@ -65,6 +68,10 @@ class AppShell {
   /// Text equal to it is not sent again, which is what stops a copy bouncing
   /// back and forth between two devices for ever.
   String? _sharedText;
+
+  /// The same for pictures: the file name of the one last sent or received.
+  /// Pictures are named after their contents, so it is the same everywhere.
+  String? _sharedImage;
 
   /// Until when a picture appearing on the clipboard is this app's own,
   /// just put there, and must not be recorded as a new one. The system
@@ -74,11 +81,15 @@ class AppShell {
   /// Completes when everything copied so far has been read and recorded.
   /// Recording a picture means writing a file, which takes a moment.
   Future<void> get captured async {
-    Future<void> pending;
+    Future<void> capture;
+    Future<void> share;
     do {
-      pending = _lastCapture;
-      await pending;
-    } while (!identical(pending, _lastCapture));
+      capture = _lastCapture;
+      share = _lastShare;
+      await capture;
+      await share;
+    } while (!identical(capture, _lastCapture) ||
+        !identical(share, _lastShare));
   }
 
   /// Called with each step of [start] as it begins; for tracing a launch
@@ -124,6 +135,13 @@ class AppShell {
     _remoteClips = sync.remoteClips.listen(_applyRemote);
     _subscriptions
       ..add(sync.remoteDeletes.listen(history.removeRemote))
+      ..add(sync.remoteImages.listen(_applyRemoteImage))
+      ..add(
+        sync.remoteImageDeletes.listen((name) {
+          _forgetSharedImage(name);
+          history.removeRemoteImage(name);
+        }),
+      )
       ..add(sync.remoteClears.listen((_) => history.clearRemote()))
       ..add(
         sync.remoteHistory.listen(
@@ -138,10 +156,22 @@ class AppShell {
     // devices too. Only text travels, so only text entries are passed on.
     history
       ..onRemoved = (entry) {
-        if (_isText(entry)) sync.sendDelete(entry.text);
+        if (_isText(entry)) {
+          sync.sendDelete(entry.text);
+        } else if (entry.imagePath != null) {
+          final name = path.basename(entry.imagePath!);
+          _forgetSharedImage(name);
+          sync.sendImageDelete(name);
+        }
       }
       ..onRestored = (entry) {
-        if (_isText(entry)) sync.sendHistory([_item(entry)]);
+        if (_isText(entry)) {
+          sync.sendHistory([_item(entry)]);
+        } else if (entry.imagePath != null) {
+          // Forget that the others had it, or it would not be sent again.
+          _sharedImage = null;
+          _queueImageShare(entry);
+        }
       }
       ..onCleared = sync.sendClear;
     // A device joining for the first time can be given what is already
@@ -163,6 +193,7 @@ class AppShell {
       case EntryKind.image:
         _ownImageUntil = _clock().add(const Duration(seconds: 2));
         _clipboard.writeImage(entry.imagePath!);
+        _queueImageShare(entry);
         history.recordImage(
           path: entry.imagePath!,
           width: entry.imageWidth ?? 0,
@@ -213,6 +244,7 @@ class AppShell {
     page.removeListener(_onPageChanged);
     _stopWatchingClipboard?.call();
     _stopWatchingClipboard = null;
+    await captured;
     await _remoteClips?.cancel();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
@@ -295,16 +327,89 @@ class AppShell {
     if (_clock().isBefore(_ownImageUntil)) return;
     final image = await _clipboard.readImage();
     if (image == null) return;
-    history.recordImage(
-      path: await vault.store(image.png),
+    final stored = await vault.store(image.png);
+    final recorded = history.recordImage(
+      path: stored,
       width: image.width,
       height: image.height,
+    );
+    if (recorded) {
+      _sendImage(
+        path.basename(stored),
+        image.png,
+        width: image.width,
+        height: image.height,
+      );
+    }
+  }
+
+  // Once a picture is deleted it is no longer "the one the devices share":
+  // if it comes back, it has to be accepted and sent like a new one.
+  void _forgetSharedImage(String name) {
+    if (_sharedImage == name) _sharedImage = null;
+  }
+
+  // Reading a picture back from disk takes a moment; the reads are chained
+  // so they finish in order and [captured] can wait for them.
+  void _queueImageShare(ClipboardEntry entry) {
+    _lastShare = _lastShare.then((_) => _shareImage(entry));
+  }
+
+  // Sends the stored picture of [entry] to the other devices.
+  Future<void> _shareImage(ClipboardEntry entry) async {
+    final file = File(entry.imagePath!);
+    try {
+      _sendImage(
+        path.basename(file.path),
+        await file.readAsBytes(),
+        width: entry.imageWidth ?? 0,
+        height: entry.imageHeight ?? 0,
+      );
+    } on FileSystemException catch (error) {
+      debugPrint('Could not read a picture to send it: $error');
+    }
+  }
+
+  void _sendImage(
+    String name,
+    Uint8List png, {
+    required int width,
+    required int height,
+  }) {
+    // The same picture twice in a row is not sent twice, which is also what
+    // keeps one from bouncing between two devices.
+    if (history.paused || name == _sharedImage) return;
+    _sharedImage = name;
+    _sharedText = null;
+    if (!sync.sendImage(png, width: width, height: height)) {
+      debugPrint('A picture was too large to send to the other devices.');
+    }
+  }
+
+  Future<void> _applyRemoteImage(RemoteImage image) async {
+    final vault = images;
+    // Paused means paused in both directions.
+    if (vault == null || history.paused) return;
+    final stored = await vault.store(image.png);
+    final name = path.basename(stored);
+    if (name == _sharedImage) return;
+    _sharedImage = name;
+    _sharedText = null;
+    // The clipboard will report this write; it is not a new copy.
+    _ownImageUntil = _clock().add(const Duration(seconds: 2));
+    _clipboard.writeImage(stored);
+    history.recordImage(
+      path: stored,
+      width: image.width,
+      height: image.height,
+      source: image.fromName,
     );
   }
 
   void _share(String text) {
     if (history.paused || text == _sharedText) return;
     _sharedText = text;
+    _sharedImage = null;
     sync.sendClip(text);
   }
 
@@ -312,6 +417,7 @@ class AppShell {
     // Paused means paused in both directions.
     if (history.paused || clip.text == _sharedText) return;
     _sharedText = clip.text;
+    _sharedImage = null;
     _clipboard.writeText(clip.text);
     history.record(clip.text, source: clip.fromName);
   }
