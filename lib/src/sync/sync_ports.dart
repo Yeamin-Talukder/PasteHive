@@ -74,6 +74,8 @@ class SyncSettings {
     required this.deviceName,
     this.enabled = false,
     this.key,
+    this.shareHistory = false,
+    this.knownDevices = const [],
   });
 
   factory SyncSettings.fromJson(Map<String, Object?> json) {
@@ -82,6 +84,11 @@ class SyncSettings {
       deviceName: json['deviceName']! as String,
       enabled: json['enabled'] as bool? ?? false,
       key: json['key'] as String?,
+      shareHistory: json['shareHistory'] as bool? ?? false,
+      knownDevices: [
+        for (final id in json['knownDevices'] as List? ?? const [])
+          id as String,
+      ],
     );
   }
 
@@ -96,12 +103,26 @@ class SyncSettings {
   /// The sync key's 20 characters, or null when none has been set.
   final String? key;
 
-  SyncSettings copyWith({bool? enabled, String? Function()? key}) {
+  /// Whether a device that joins is sent the history already here.
+  final bool shareHistory;
+
+  /// The ids of the devices this one has synced with before, so a device
+  /// connecting for the first time can be told apart.
+  final List<String> knownDevices;
+
+  SyncSettings copyWith({
+    bool? enabled,
+    String? Function()? key,
+    bool? shareHistory,
+    List<String>? knownDevices,
+  }) {
     return SyncSettings(
       deviceId: deviceId,
       deviceName: deviceName,
       enabled: enabled ?? this.enabled,
       key: key == null ? this.key : key(),
+      shareHistory: shareHistory ?? this.shareHistory,
+      knownDevices: knownDevices ?? this.knownDevices,
     );
   }
 
@@ -110,6 +131,8 @@ class SyncSettings {
     'deviceName': deviceName,
     'enabled': enabled,
     'key': key,
+    'shareHistory': shareHistory,
+    'knownDevices': knownDevices,
   };
 }
 

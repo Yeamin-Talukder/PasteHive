@@ -14,9 +14,13 @@ class SyncSettingsView extends StatefulWidget {
     required this.sync,
     required this.hasMaterial,
     required this.onDone,
+    this.onSendHistory,
   });
 
   final SyncService sync;
+
+  /// Sends this device's history to the connected devices now.
+  final VoidCallback? onSendHistory;
 
   /// Whether something translucent is behind this widget.
   final bool hasMaterial;
@@ -30,6 +34,7 @@ class SyncSettingsView extends StatefulWidget {
 
 class _SyncSettingsViewState extends State<SyncSettingsView> {
   bool _confirmingLeave = false;
+  bool _historySent = false;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +71,11 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
                             const SizedBox(height: 22),
                             _SectionLabel('Nearby Devices', palette: palette),
                             ..._buildNearby(palette),
+                          ],
+                          if (sync.enabled) ...[
+                            const SizedBox(height: 22),
+                            _SectionLabel('History', palette: palette),
+                            _buildHistory(palette),
                           ],
                           if (sync.hasKey) ...[
                             const SizedBox(height: 22),
@@ -340,6 +350,61 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHistory(PanelPalette palette) {
+    final sync = widget.sync;
+    final onSend = widget.onSendHistory;
+    return _Card(
+      palette: palette,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Share History with New Devices',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              Semantics(
+                label: 'Share History with New Devices',
+                child: CupertinoSwitch(
+                  value: sync.shareHistory,
+                  activeTrackColor: palette.accent,
+                  onChanged: sync.setShareHistory,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'A device that connects for the first time gets the text '
+            'already in this list. Deleting an entry removes it on every '
+            'connected device.',
+            style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
+          ),
+          const SizedBox(height: 10),
+          // Aligned rather than put in a row, so a long label at a large
+          // text size is shortened instead of running off the card.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PanelButton(
+              label: _historySent ? 'History Sent' : 'Send History Now',
+              icon: _historySent ? CupertinoIcons.checkmark : null,
+              palette: palette,
+              onPressed: onSend == null || sync.peers.isEmpty
+                  ? null
+                  : () {
+                      onSend();
+                      setState(() => _historySent = true);
+                    },
+            ),
+          ),
+        ],
       ),
     );
   }
