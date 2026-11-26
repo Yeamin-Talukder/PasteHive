@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/painting.dart' show EdgeInsets;
 import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
 import 'package:synchronize_clipboard/src/history/history_store.dart';
 import 'package:synchronize_clipboard/src/platform/ports.dart';
@@ -49,6 +50,13 @@ class FakeWindow implements PanelWindowPort {
   Rect? frame;
   final List<double> progress = [];
   int hideCount = 0;
+  int showCount = 0;
+
+  /// What [show] hands back, as a real window that draws its own glass does.
+  BackdropCapture? backdropToReturn;
+
+  @override
+  EdgeInsets chromeInsets = EdgeInsets.zero;
   void Function()? _onBlur;
 
   /// Pretends the user clicked another window.
@@ -58,9 +66,11 @@ class FakeWindow implements PanelWindowPort {
   bool prepare() => prepared = canPrepare;
 
   @override
-  void show(Rect frame) {
+  BackdropCapture? show(Rect frame) {
     this.frame = frame;
     visible = true;
+    showCount++;
+    return backdropToReturn;
   }
 
   @override

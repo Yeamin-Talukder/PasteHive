@@ -13,18 +13,29 @@ import 'src/history/history_store.dart';
 import 'src/platform/native_ports.dart';
 import 'src/shell/panel_controller.dart';
 import 'src/sync/network.dart';
+import 'src/sync/sync_ports.dart';
 import 'src/sync/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // A self-check run shows made-up entries and leaves the real history and
+  // the real clipboard alone.
+  final smokePath = SmokeRun.requestedPath;
+  final checking = smokePath != null;
+
   final supportDirectory = await getApplicationSupportDirectory();
-  final history = ClipboardHistory(
-    store: JsonFileHistoryStore(
-      File(path.join(supportDirectory.path, 'history.json')),
-    ),
-  );
-  await history.load();
+  final ClipboardHistory history;
+  if (checking) {
+    history = SmokeRun.demoHistory();
+  } else {
+    history = ClipboardHistory(
+      store: JsonFileHistoryStore(
+        File(path.join(supportDirectory.path, 'history.json')),
+      ),
+    );
+    await history.load();
+  }
 
   final window = NativePanelWindow();
   final shell = AppShell(
@@ -33,23 +44,32 @@ Future<void> main() async {
     sync: SyncService(
       discovery: UdpDiscovery(),
       transport: TcpTransport(),
-      store: JsonFileSyncSettingsStore(
-        File(path.join(supportDirectory.path, 'sync.json')),
-      ),
+      // A self-check never goes on the network: it gets blank settings.
+      store: checking
+          ? MemorySyncSettingsStore()
+          : JsonFileSyncSettingsStore(
+              File(path.join(supportDirectory.path, 'sync.json')),
+            ),
       defaultDeviceName: () => Platform.localHostname,
     ),
     clipboard: const NativeClipboard(),
     tray: NativeTray(),
     onQuit: () async => exit(0),
+    captureAtLaunch: !checking,
   );
 
-  runApp(ClipboardApp(shell: shell));
+  final captureKey = checking ? GlobalKey() : null;
+  runApp(ClipboardApp(shell: shell, captureKey: captureKey));
   await shell.start();
 
-  final smokePath = SmokeRun.requestedPath;
   if (smokePath != null) {
     unawaited(
-      SmokeRun(outputPath: smokePath, shell: shell, window: window).run(),
+      SmokeRun(
+        outputPath: smokePath,
+        shell: shell,
+        window: window,
+        captureKey: captureKey!,
+      ).run(),
     );
   }
 }

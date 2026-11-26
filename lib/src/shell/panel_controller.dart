@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show EdgeInsets;
 
 import '../platform/ports.dart';
 import 'hot_edge.dart';
@@ -47,6 +48,7 @@ class PanelController extends ChangeNotifier {
   bool _isOpen = false;
   bool _windowOnScreen = false;
   bool _holdOpen = false;
+  BackdropCapture? _backdrop;
   int _openCount = 0;
   Duration _openedAt = Duration.zero;
 
@@ -59,6 +61,15 @@ class PanelController extends ChangeNotifier {
 
   /// Whether the system paints a translucent material behind the panel.
   bool get hasMaterial => _window.hasMaterial;
+
+  /// The margin the window leaves around the panel for the UI to draw the
+  /// panel's shadow in; zero when the system draws the panel's shape.
+  EdgeInsets get chromeInsets => _window.chromeInsets;
+
+  /// What was on screen behind the panel when it last opened, for the UI to
+  /// blur into glass. Null when the system provides the material, or when
+  /// no picture could be taken.
+  BackdropCapture? get backdrop => _backdrop;
 
   /// While true, the panel stays open when the pointer leaves it or another
   /// window is clicked; only [dismiss] closes it. For views the user types
@@ -173,7 +184,7 @@ class PanelController extends ChangeNotifier {
     _openCount++;
     _openedAt = _clock();
     _windowOnScreen = true;
-    _window.show(frame);
+    _backdrop = _window.show(frame);
     notifyListeners();
   }
 

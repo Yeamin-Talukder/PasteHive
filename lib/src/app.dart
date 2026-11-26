@@ -5,9 +5,13 @@ import 'ui/panel_scene.dart';
 
 /// The app's one window: the clipboard panel.
 class ClipboardApp extends StatelessWidget {
-  const ClipboardApp({super.key, required this.shell});
+  const ClipboardApp({super.key, required this.shell, this.captureKey});
 
   final AppShell shell;
+
+  /// When given, everything drawn is wrapped in a [RepaintBoundary] with
+  /// this key, so the self-check can save a picture of it.
+  final GlobalKey? captureKey;
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +21,9 @@ class ClipboardApp extends StatelessWidget {
       // Light or dark follows the system; there is no switch of our own.
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
+      builder: captureKey == null
+          ? null
+          : (context, child) => RepaintBoundary(key: captureKey, child: child),
       home: PanelScene(
         controller: shell.panel,
         history: shell.history,

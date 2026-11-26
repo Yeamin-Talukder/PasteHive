@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
 import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
@@ -225,6 +227,111 @@ void main() {
         pinned: true,
       );
       expect(ClipboardEntry.fromJson(original.toJson()), original);
+    });
+  });
+
+  group('kinds', () {
+    ClipboardEntry entry(String text) =>
+        ClipboardEntry(id: 'a', text: text, copiedAt: DateTime.utc(2026));
+
+    test('tells links, emails, colours and plain text apart', () {
+      expect(entry('https://flutter.dev').kind, EntryKind.link);
+      expect(entry(' someone@example.com\n').kind, EntryKind.email);
+      expect(entry('#1E90FF').kind, EntryKind.color);
+      expect(entry('#fff').kind, EntryKind.color);
+      expect(entry('#12345').kind, EntryKind.text);
+      expect(entry('#hashtag').kind, EntryKind.text);
+      expect(entry('mail someone@example.com').kind, EntryKind.text);
+      expect(entry('ftp://files.example.com').kind, EntryKind.text);
+    });
+
+    test('reads a colour in its three spellings', () {
+      expect(entry('#1E90FF').color, const Color(0xFF1E90FF));
+      expect(entry('#f80').color, const Color(0xFFFF8800));
+      expect(entry('#1E90FF80').color, const Color(0x801E90FF));
+      expect(entry('plain').color, isNull);
+    });
+  });
+
+  group('filters', () {
+    late ClipboardHistory history;
+
+    setUp(() {
+      history = historyWith([
+        'a note',
+        'https://flutter.dev',
+        'someone@example.com',
+        '#1E90FF',
+      ]);
+      history
+        ..record('from the mac', source: 'Mac')
+        ..togglePin(history.entries.last.id);
+    });
+
+    List<String> shown(EntryFilter filter, [String query = '']) => [
+      for (final entry in history.search(query, filter: filter)) entry.text,
+    ];
+
+    test('each filter keeps only its own kind', () {
+      expect(shown(EntryFilter.all), hasLength(5));
+      expect(shown(EntryFilter.pinned), ['a note']);
+      expect(shown(EntryFilter.text), ['a note', 'from the mac']);
+      expect(shown(EntryFilter.links), ['https://flutter.dev']);
+      expect(shown(EntryFilter.emails), ['someone@example.com']);
+      expect(shown(EntryFilter.colors), ['#1E90FF']);
+      expect(shown(EntryFilter.synced), ['from the mac']);
+    });
+
+    test('a filter and a search both have to match', () {
+      expect(shown(EntryFilter.text, 'mac'), ['from the mac']);
+      expect(shown(EntryFilter.links, 'mac'), isEmpty);
+    });
+  });
+
+  group('where an entry came from', () {
+    test('is remembered, and saved', () async {
+      final store = MemoryHistoryStore();
+      final history = historyWith([], store: store)
+        ..record('local')
+        ..record('remote', source: 'Mac');
+      await history.flush();
+
+      expect(history.entries.first.source, 'Mac');
+      expect(history.entries.first.isSynced, isTrue);
+      expect(history.entries.last.isSynced, isFalse);
+      expect(ClipboardEntry.fromJson(store.saved.first.toJson()).source, 'Mac');
+    });
+
+    test('follows the latest copy of the same text', () {
+      final history = historyWith(['same'])..record('same', source: 'Mac');
+      expect(history.entries.single.source, 'Mac');
+
+      history.record('same');
+      expect(history.entries.single.source, isNull);
+    });
+  });
+
+  group('restore', () {
+    test('puts a removed entry back where it was', () {
+      final history = historyWith(['one', 'two', 'three']);
+      final removed = history.entries[1];
+      history
+        ..remove(removed.id)
+        ..restore(removed);
+
+      expect(texts(history), ['three', 'two', 'one']);
+      expect(history.entries[1], removed);
+    });
+
+    test('does nothing if the text was copied again meanwhile', () {
+      final history = historyWith(['one', 'two']);
+      final removed = history.entries.last;
+      history
+        ..remove(removed.id)
+        ..record('one')
+        ..restore(removed);
+
+      expect(texts(history), ['one', 'two']);
     });
   });
 }
