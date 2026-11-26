@@ -1,98 +1,133 @@
-# PasteHive
+<p align="center">
+  <img src="docs/banner.png" alt="PasteHive: clipboard history and sync for Windows, macOS and Android" width="100%">
+</p>
 
-(The project folder and package are still called `synchronize_clipboard`.)
+<h1 align="center">PasteHive: clipboard manager and clipboard sync</h1>
 
-A clipboard manager for Windows and macOS that lives in the background. Push the
-pointer to the top middle of the screen and a panel drops down with everything
-you copied; click an entry (or press Enter) to put it back on the clipboard.
+<p align="center">
+  A free, open-source clipboard manager for <b>Windows</b>, <b>macOS</b> and <b>Android</b>.<br>
+  It keeps a searchable history of everything you copy and syncs your clipboard between your own devices
+  over the local network, encrypted, with no cloud and no account.
+</p>
 
-Text you copy on one of your computers also lands on the clipboard of the
-others, over the local network, once they share a sync key.
+<p align="center">
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Yeamin-Talukder/synchronize-clipboard?label=release&color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Yeamin-Talukder/synchronize-clipboard/total?label=downloads&color=111111"></a>
+  <img alt="Page views" src="https://hits.sh/github.com/Yeamin-Talukder/synchronize-clipboard.svg?label=views&color=111111">
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/forks"><img alt="GitHub forks" src="https://img.shields.io/github/forks/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <br>
+  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <img alt="Repository size" src="https://img.shields.io/github/repo-size/Yeamin-Talukder/synchronize-clipboard?color=111111">
+  <img alt="Platforms: Windows, macOS, Android" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-111111">
+  <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-111111?logo=flutter&logoColor=white">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+</p>
 
-## What it does today
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#download">Download</a> ·
+  <a href="#sync-your-clipboard-between-devices">Sync</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a> ·
+  <a href="#privacy-and-security">Privacy</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#build-from-source">Build</a>
+</p>
 
-- Runs with no taskbar button or Dock icon. A tray icon (Windows) or menu bar
-  icon (macOS) offers Show Clipboard, Sync Settings, Pause Capturing, start at
-  login, Clear History and Quit.
-- Records what you copy, newest first, grouped under Pinned, Today,
-  Yesterday, This Week and Earlier: text, pictures (screenshots, images copied
-  from a page or an editor) and files copied in a file manager. Copying the
-  same thing again moves it to the top. Links, email addresses and hex colours
-  are recognised; a colour is shown as a swatch and a picture as a thumbnail.
-- Choosing an entry puts it back on the clipboard and, on Windows, pastes it
-  straight into the field you were working in before the panel opened.
-- Opens when the pointer rests at the top middle of any screen, and closes when
-  the pointer leaves, on Esc, or when you click elsewhere.
-- Filters under the search field: All, Pinned, Text, Links, Images, and Files,
-  Emails, Colors and Synced when there is something for them to show.
+<p align="center">
+  <img src="docs/screenshot-dark.png" alt="PasteHive clipboard history panel with search, filters and pinned entries" width="46%">
+  &nbsp;
+  <img src="docs/screenshot-sync.png" alt="PasteHive sync settings showing a connected device on the local network" width="46%">
+</p>
+
+## What is PasteHive?
+
+PasteHive is a clipboard history app that stays out of the way. On a computer it
+lives in the background: push the pointer to the top middle of the screen and a
+glass panel drops down with everything you copied. Click an entry, or press
+Enter, and it is pasted where you were typing.
+
+Switch sync on and your devices become one hive: what you copy on one lands on
+the clipboard of the others. Nothing is sent to a server. Devices find each
+other on your Wi-Fi or wired network and talk directly, encrypted.
+
+## Features
+
+**Clipboard history**
+
+- Records text, pictures (screenshots, images copied from a page or an editor)
+  and files copied in a file manager, newest first.
+- Groups entries under Pinned, Today, Yesterday, This Week and Earlier.
+- Search as you type, and filter by All, Pinned, Text, Links, Images, Files,
+  Emails, Colors and Synced.
+- Recognises links, email addresses and hex colours. A colour is shown as a
+  swatch and a picture as a thumbnail.
 - Preview an entry in full, pin it, or delete it. A deleted entry can be
   brought back for a few seconds.
+- Copying the same thing again moves it to the top instead of adding a
+  duplicate.
 
-| Key | Does |
-| --- | --- |
-| Type | Search |
-| Up / Down | Move through the list |
-| Enter | Paste the selected entry where you were typing (Windows), or copy it (macOS), and close |
-| Space | Preview the selected entry (while the search field is empty) |
-| Tab / Shift+Tab | Next / previous filter |
-| Delete | Delete the selected entry (while the search field is empty) |
-| Ctrl+Z (Cmd+Z) | Bring back the entry just deleted |
-| Ctrl+P (Cmd+P) | Pin or unpin the selected entry |
-| Esc | Close the preview, clear the search, reset the filter, then close |
+**Clipboard sync**
 
-History is kept in `history.json` in the app's support folder, as plain text.
-Copied pictures are kept as PNG files in an `images` folder beside it (at most
-40 unpinned ones; older ones are deleted). Files are remembered by path only:
-the files themselves are not copied anywhere.
+- Copy on one device, paste on another: text and pictures.
+- Pair devices by request and accept, checked with a six-digit code. There is
+  no key to type and no account to create.
+- More than two devices can share one group: pair a new device with any
+  member and it syncs with all of them.
+- Deleting an entry, undoing the delete and Clear History carry over to every
+  connected device.
+- Optionally share the text already in your history with a newly connected
+  device.
 
-Pasting works by handing the keyboard back to the window that had it and
-sending Ctrl+V. Windows does not deliver that to a program running as
-administrator, so nothing is pasted there; the entry is still on the clipboard.
-On macOS the same thing needs the Accessibility permission and is not done yet.
+**Made to stay out of the way**
 
-### How the glass is drawn
+- No taskbar button and no Dock icon. A tray icon (Windows) or menu bar icon
+  (macOS) offers Show Clipboard, Sync Settings, Pause Capturing, start at
+  login, Clear History and Quit.
+- Opens when the pointer rests at the top middle of any screen. Closes when
+  the pointer leaves, on Esc, or when you click elsewhere.
+- Picking an entry pastes it straight into the app you were working in.
+- Light and dark appearance, an opaque fallback when more contrast is
+  requested, and no motion when reduced motion is on.
 
-The two systems need different approaches.
+## Platforms
 
-- **Windows** blurs behind a window only while that window is the active one,
-  and a panel that opens on hover often is not. So the app's window is a
-  transparent sheet and the app draws the glass itself: just before the panel
-  opens it reads the pixels of the screen where the panel will be, blurs them,
-  and draws the panel over that with its own rounded shape, edge highlight and
-  shadow. One spring animates all of it and the window never moves. The
-  picture is taken once per opening, so what is behind the glass does not
-  update while the panel is open.
-- **macOS** blurs behind any window, so there the window itself is the panel,
-  on the system's vibrancy material with the system's corners and shadow.
-  Reading the screen would need the Screen Recording permission and is not
-  done.
+| Platform | What you get | Status |
+| --- | --- | --- |
+| Windows | Background panel, history, paste into the previous app, sync | The most used and tested build |
+| macOS | Background panel, history, paste (needs the Accessibility permission), sync | Release builds pass the app's self-checks; less tested on real hardware |
+| Android | Full-screen history, filters, preview, sync | Early. See the limits below |
 
-Either way the panel falls back to an opaque surface when there is nothing to
-blur or more contrast is requested, and skips the motion when reduced motion
-is on.
+Android does not let an app watch the clipboard in the background. On a phone
+PasteHive reads the clipboard each time it comes to the front, and also takes
+text from Share and from the text-selection menu. While sync is on, a
+notification keeps the connection alive. Pictures arrive in the list but cannot
+yet be put on the phone's clipboard.
 
-## Sync
+## Download
 
-Sync is off until a key is set, and no network port is opened before then.
+There is no packaged release yet. When there is one, installers will be on the
+[Releases page](https://github.com/Yeamin-Talukder/synchronize-clipboard/releases),
+and the download badge at the top of this page will start counting. Until then,
+[build it from source](#build-from-source); it takes one command per platform.
 
-1. On the first computer open Sync Settings (the button at the bottom left of
-   the panel, or the tray menu) and choose Create a Key.
-2. On the other computer open Sync Settings, type that key and choose Join.
+## Sync your clipboard between devices
 
-Both must be on the same network. From then on, text copied on either one is
-put on the other's clipboard and added to its list. Pause Capturing stops both
-sending and receiving.
+Sync is off until you switch it on, and no network port is opened before then.
 
-How it works:
+1. Put your devices on the same network.
+2. Open **Sync Settings** on each (the button at the bottom left of the panel,
+   or the tray menu) and switch on **Sync over Local Network**.
+3. On one device, choose the other under **Nearby Devices** and press
+   **Connect**.
+4. The other device shows the request with a six-digit code. Check that both
+   show the same code, then press **Accept**.
 
-- Each device announces itself every few seconds by UDP (port 45817, multicast
-  group 239.255.77.67 and broadcast). The announcement carries a device id, a
-  TCP port and a tag derived from the sync key; not the key, and not the
-  device's name.
-- Devices that recognise each other's tag connect over TCP. Each connection
-  does a fresh X25519 key exchange, derives its encryption keys from that and
-  the sync key together (HKDF-SHA256), and encrypts every message with
-  ChaCha20-Poly1305. Without the key a device can neither join nor read.
+From then on, what you copy on either one is put on the other's clipboard and
+added to its list. Pairing a third device with any member of the group makes it
+sync with all of them. **Pause Capturing** stops both sending and receiving, and
+**Stop Syncing with All Devices** leaves the group.
 
 Things to know:
 
@@ -101,24 +136,112 @@ Things to know:
   needs both to be allowed.
 - Networks that keep devices apart (guest Wi-Fi, some office networks) will
   not work.
-- Only text is sent, and only new copies of it. Pictures and files stay on the
-  device they were copied on. Histories are not merged, and pins and
-  deletions stay on the device they were made on.
-- The sync key is stored in `sync.json` in the app's support folder as plain
-  text, next to the history.
-- The protocol is assembled from standard parts but was written for this app
-  and has not had an independent security review.
+- Text and pictures are synced. Pictures larger than 5 MB as PNG stay on the
+  device where they were copied. Files are never sent: a path means nothing on
+  another machine.
+- A device that is off or away when something is deleted does not hear about
+  it.
 
-## Running
+## Keyboard shortcuts
+
+| Key | Does |
+| --- | --- |
+| Type | Search |
+| Up / Down | Move through the list |
+| Enter | Paste the selected entry where you were typing, and close |
+| Space | Preview the selected entry (while the search field is empty) |
+| Tab / Shift+Tab | Next / previous filter |
+| Delete | Delete the selected entry (while the search field is empty) |
+| Ctrl+Z (Cmd+Z) | Bring back the entry just deleted |
+| Ctrl+P (Cmd+P) | Pin or unpin the selected entry |
+| Esc | Close the preview, clear the search, reset the filter, then close |
+
+Windows does not deliver a paste to a program running as administrator, so
+nothing is pasted there; the entry is still on the clipboard.
+
+## Privacy and security
+
+- **No cloud, no account, no telemetry.** Your clipboard goes only to devices
+  you have accepted, directly over your own network.
+- **Encrypted in transit.** Each connection does a fresh X25519 key exchange,
+  derives its keys from that and the group's key together (HKDF-SHA256), and
+  encrypts every message with ChaCha20-Poly1305. A device without the group's
+  key can neither join nor read.
+- **Visible on your network while sync is on.** Devices announce themselves by
+  name over UDP (port 45817, multicast group 239.255.77.67 and broadcast) so
+  that others on the same network can find them. What you copy is sent only
+  to devices you have accepted.
+- **Stored on your device, unencrypted.** History is kept in `history.json` in
+  the app's support folder as plain text, copied pictures as PNG files in an
+  `images` folder beside it (at most 40 unpinned ones), and the group's key in
+  `sync.json`. Anyone with access to your user account can read them.
+- **Not independently reviewed.** The protocol is assembled from standard parts
+  but was written for this app and has not had a security audit. Do not rely on
+  it for secrets you could not afford to leak.
+
+## FAQ
+
+**Is PasteHive free?**
+Yes. It is open source under the MIT license.
+
+**Does my clipboard go through a server?**
+No. Devices connect to each other directly on the local network. There is no
+PasteHive server.
+
+**Does it work over the internet, away from home?**
+No. Both devices have to be on the same local network.
+
+**Can I copy on Windows and paste on a Mac or an Android phone?**
+Yes, for text and pictures, once the devices are paired. On Android, pictures
+arrive in the list but cannot yet be put on the clipboard.
+
+**Does it replace the Windows clipboard history (Win+V) or Apple's Universal Clipboard?**
+It works alongside them. PasteHive adds search, filters, pinning and sync
+between Windows, macOS and Android, which those do not cover together.
+
+**How much battery does it use?**
+On a Windows laptop the idle app measured about 1.8% of one CPU core. On a
+phone, keeping sync on in the background costs more; switch sync off when you
+do not need it.
+
+**Does it capture passwords?**
+It records whatever is copied. Use **Pause Capturing** before copying something
+you do not want kept, or delete the entry afterwards.
+
+## Build from source
+
+You need [Flutter](https://docs.flutter.dev/get-started/install) and the
+platform's own toolchain (Visual Studio for Windows, Xcode for macOS, Android
+Studio for Android).
+
+```powershell
+git clone https://github.com/Yeamin-Talukder/synchronize-clipboard.git
+cd synchronize-clipboard
+flutter pub get
+```
+
+Run it:
 
 ```powershell
 flutter run -d windows
+flutter run -d macos
+flutter run -d android
 ```
 
-On a Mac: `flutter run -d macos`. The macOS side has been written but not yet
-built or run; expect to fix things on first contact.
+Build a release:
 
-## Checks
+```powershell
+flutter build windows
+flutter build macos
+flutter build apk
+```
+
+The project folder, the Dart package and the binaries are still called
+`synchronize_clipboard`; only the name shown to users is PasteHive.
+
+## For developers
+
+### Checks
 
 ```powershell
 flutter analyze
@@ -139,20 +262,45 @@ than your history) and quit:
 $env:SYNC_CLIPBOARD_SMOKE = "$PWD\build\smoke.json"; .\build\windows\x64\runner\Debug\synchronize_clipboard.exe
 ```
 
-## Layout
+### How the glass is drawn
+
+The two desktop systems need different approaches.
+
+- **Windows** blurs behind a window only while that window is the active one,
+  and a panel that opens on hover often is not. So the app's window is a
+  transparent sheet and the app draws the glass itself: just before the panel
+  opens it reads the pixels of the screen where the panel will be, blurs them,
+  and draws the panel over that with its own rounded shape, edge highlight and
+  shadow. One spring animates all of it and the window never moves. The
+  picture is taken once per opening, so what is behind the glass does not
+  update while the panel is open.
+- **macOS** blurs behind any window, so there the window itself is the panel,
+  on the system's vibrancy material with the system's corners and shadow.
+
+### Layout
 
 | Path | What is there |
 | --- | --- |
 | `lib/src/history/` | Entries, the history list, saving to disk |
 | `lib/src/shell/` | The top-edge gesture and opening/closing the panel |
 | `lib/src/platform/` | `ports.dart` (interfaces) and `native_ports.dart` (the real desktop, via `nativeapi`) |
-| `lib/src/sync/` | Sync key, encrypted channel, the sync service, and `network.dart` (real UDP and TCP) |
+| `lib/src/sync/` | Group key, encrypted channel, the sync service, and `network.dart` (real UDP and TCP) |
 | `lib/src/ui/` | The panel, its animation, and the sync settings view |
+| `lib/src/mobile/` | The Android app |
 | `lib/src/app_shell.dart` | Ties capture, tray and panel together |
-| `tool/generate_tray_icons.dart` | Redraws the tray icons in `assets/tray/` |
+| `design/logo/` | Logo sources, icon exports and the banner |
 
 Everything that touches the operating system is behind an interface in
 `ports.dart`, so the logic and the UI are tested with fakes.
+
+## Contributing
+
+Bug reports and ideas are welcome in
+[Issues](https://github.com/Yeamin-Talukder/synchronize-clipboard/issues).
+For a code change, run `flutter analyze` and `flutter test` before opening a
+pull request.
+
+If PasteHive is useful to you, a star helps other people find it.
 
 ## License
 
