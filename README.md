@@ -104,3 +104,7 @@ $env:SYNC_CLIPBOARD_SMOKE = "$PWD\build\smoke.json"; .\build\windows\x64\runner\
 
 Everything that touches the operating system is behind an interface in
 `ports.dart`, so the logic and the UI are tested with fakes.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
