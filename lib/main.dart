@@ -12,6 +12,8 @@ import 'src/history/clipboard_history.dart';
 import 'src/history/history_store.dart';
 import 'src/platform/native_ports.dart';
 import 'src/shell/panel_controller.dart';
+import 'src/sync/network.dart';
+import 'src/sync/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,14 @@ Future<void> main() async {
   final shell = AppShell(
     history: history,
     panel: PanelController(pointer: const NativePointer(), window: window),
+    sync: SyncService(
+      discovery: UdpDiscovery(),
+      transport: TcpTransport(),
+      store: JsonFileSyncSettingsStore(
+        File(path.join(supportDirectory.path, 'sync.json')),
+      ),
+      defaultDeviceName: () => Platform.localHostname,
+    ),
     clipboard: const NativeClipboard(),
     tray: NativeTray(),
     onQuit: () async => exit(0),

@@ -21,6 +21,8 @@ class ClipboardApp extends StatelessWidget {
         controller: shell.panel,
         history: shell.history,
         onCopy: shell.copy,
+        sync: shell.sync,
+        page: shell.page,
       ),
     );
   }

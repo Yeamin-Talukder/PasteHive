@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
 import 'panel_palette.dart';
+import 'panel_surface.dart';
 
 /// The contents of the clipboard panel: a search field over the list of
 /// things copied.
@@ -25,6 +26,8 @@ class ClipboardPanel extends StatefulWidget {
     required this.hasMaterial,
     required this.onCopy,
     required this.onDismiss,
+    this.sync,
+    this.onOpenSync,
     this.clock = DateTime.now,
   });
 
@@ -41,6 +44,12 @@ class ClipboardPanel extends StatefulWidget {
 
   final ValueChanged<ClipboardEntry> onCopy;
   final VoidCallback onDismiss;
+
+  /// What to say about sync in the footer; null leaves sync out of it.
+  final SyncSummary? sync;
+
+  /// Opens the sync settings.
+  final VoidCallback? onOpenSync;
 
   /// The current time, for "5 min ago". Replaceable so tests are stable.
   final DateTime Function() clock;
@@ -148,83 +157,40 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = PanelPalette.of(
-      brightness: Theme.of(context).brightness,
-      hasMaterial: widget.hasMaterial,
-      highContrast: MediaQuery.highContrastOf(context),
-    );
     // Rows grow with the user's text size so two lines always fit.
     _rowExtent = math.max(54, MediaQuery.textScalerOf(context).scale(13) * 4.2);
 
-    return Material(
-      type: MaterialType.transparency,
-      child: DefaultTextStyle(
-        // Built on the theme's body style so the platform's own UI font is
-        // used (San Francisco on macOS, Segoe UI on Windows).
-        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 13,
-          height: 1.25,
-          letterSpacing: 0,
-          color: palette.label,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: palette.surface),
-          child: Stack(
+    return PanelSurface(
+      hasMaterial: widget.hasMaterial,
+      builder: (context, palette) => ListenableBuilder(
+        listenable: widget.history,
+        builder: (context, _) {
+          _results = widget.history.search(_search.text);
+          if (_selected >= _results.length) {
+            _selected = math.max(0, _results.length - 1);
+          }
+          return Column(
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                height: 72,
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          palette.sheen,
-                          palette.sheen.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+              _SearchField(
+                controller: _search,
+                focusNode: _searchFocus,
+                palette: palette,
               ),
-              ListenableBuilder(
-                listenable: widget.history,
-                builder: (context, _) {
-                  _results = widget.history.search(_search.text);
-                  if (_selected >= _results.length) {
-                    _selected = math.max(0, _results.length - 1);
-                  }
-                  return Column(
-                    children: [
-                      _SearchField(
-                        controller: _search,
-                        focusNode: _searchFocus,
-                        palette: palette,
-                      ),
-                      Expanded(
-                        child: _results.isEmpty
-                            ? _EmptyState(
-                                palette: palette,
-                                query: _search.text.trim(),
-                              )
-                            : _buildList(palette),
-                      ),
-                      _Footer(
-                        palette: palette,
-                        count: _results.length,
-                        paused: widget.history.paused,
-                      ),
-                    ],
-                  );
-                },
+              Expanded(
+                child: _results.isEmpty
+                    ? _EmptyState(palette: palette, query: _search.text.trim())
+                    : _buildList(palette),
+              ),
+              _Footer(
+                palette: palette,
+                count: _results.length,
+                paused: widget.history.paused,
+                sync: widget.sync,
+                onOpenSync: widget.onOpenSync,
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -375,7 +341,7 @@ class _SearchField extends StatelessWidget {
                   listenable: controller,
                   builder: (context, _) {
                     if (controller.text.isEmpty) return const SizedBox.shrink();
-                    return _IconAction(
+                    return PanelIconButton(
                       icon: CupertinoIcons.clear_circled_solid,
                       label: 'Clear Search',
                       palette: palette,
@@ -468,7 +434,7 @@ class _EntryRow extends StatelessWidget {
                   ),
                   if (selected) ...[
                     const SizedBox(width: 6),
-                    _IconAction(
+                    PanelIconButton(
                       icon: entry.pinned
                           ? CupertinoIcons.pin_slash
                           : CupertinoIcons.pin,
@@ -476,7 +442,7 @@ class _EntryRow extends StatelessWidget {
                       palette: palette,
                       onPressed: onTogglePin,
                     ),
-                    _IconAction(
+                    PanelIconButton(
                       icon: CupertinoIcons.trash,
                       label: 'Delete',
                       palette: palette,
@@ -529,69 +495,6 @@ class _KindTile extends StatelessWidget {
   }
 }
 
-/// An icon-only button with a tooltip and a screen-reader label.
-class _IconAction extends StatefulWidget {
-  const _IconAction({
-    required this.icon,
-    required this.label,
-    required this.palette,
-    required this.onPressed,
-    this.size = 28,
-  });
-
-  final IconData icon;
-  final String label;
-  final PanelPalette palette;
-  final VoidCallback onPressed;
-  final double size;
-
-  @override
-  State<_IconAction> createState() => _IconActionState();
-}
-
-class _IconActionState extends State<_IconAction> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.label,
-      waitDuration: const Duration(milliseconds: 600),
-      child: Semantics(
-        button: true,
-        label: widget.label,
-        excludeSemantics: true,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onPressed,
-            child: Container(
-              width: widget.size,
-              height: widget.size,
-              decoration: BoxDecoration(
-                color: _hovered
-                    ? widget.palette.controlFill
-                    : const Color(0x00000000),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                widget.icon,
-                size: widget.size * 0.5,
-                color: _hovered
-                    ? widget.palette.label
-                    : widget.palette.secondaryLabel,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.palette, required this.query});
 
@@ -634,28 +537,84 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+/// What the footer says about sync, in a word or two.
+@immutable
+class SyncSummary {
+  const SyncSummary({required this.label, this.connected = false});
+
+  /// "Sync Off", "Searching…", the other device's name, or "3 Devices".
+  final String label;
+
+  /// Whether at least one other device is connected right now.
+  final bool connected;
+}
+
 class _Footer extends StatelessWidget {
   const _Footer({
     required this.palette,
     required this.count,
     required this.paused,
+    required this.sync,
+    required this.onOpenSync,
   });
 
   final PanelPalette palette;
   final int count;
   final bool paused;
+  final SyncSummary? sync;
+  final VoidCallback? onOpenSync;
 
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(fontSize: 11, color: palette.secondaryLabel);
+    final sync = this.sync;
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: palette.separator)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 9),
+        padding: const EdgeInsets.fromLTRB(10, 6, 16, 7),
         child: Row(
           children: [
+            if (sync != null && onOpenSync != null)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 170),
+                child: Tooltip(
+                  message: 'Sync Settings',
+                  waitDuration: const Duration(milliseconds: 600),
+                  child: PanelButton(
+                    label: sync.label,
+                    // A filled symbol once connected: the state is not told
+                    // by the label alone.
+                    icon: sync.connected
+                        ? CupertinoIcons.link_circle_fill
+                        : CupertinoIcons.link_circle,
+                    palette: palette,
+                    compact: true,
+                    onPressed: onOpenSync,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: 6),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ExcludeSemantics(
+                child: Text(
+                  // Named as the keys are labelled on each platform's
+                  // keyboards.
+                  defaultTargetPlatform == TargetPlatform.macOS
+                      ? '↑↓ Select   return Copy'
+                      : '↑↓ Select   Enter Copy',
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: style,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
             if (paused) ...[
               Icon(
                 CupertinoIcons.pause_circle_fill,
@@ -671,23 +630,6 @@ class _Footer extends StatelessWidget {
                   ? '1 item'
                   : '$count items',
               style: style,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ExcludeSemantics(
-                child: Text(
-                  // Named as the keys are labelled on each platform's
-                  // keyboards.
-                  defaultTargetPlatform == TargetPlatform.macOS
-                      ? '↑↓ Select   return Copy   esc Close'
-                      : '↑↓ Select   Enter Copy   Esc Close',
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  softWrap: false,
-                  style: style,
-                ),
-              ),
             ),
           ],
         ),

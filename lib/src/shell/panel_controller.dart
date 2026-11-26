@@ -46,6 +46,7 @@ class PanelController extends ChangeNotifier {
   bool _prepared = false;
   bool _isOpen = false;
   bool _windowOnScreen = false;
+  bool _holdOpen = false;
   int _openCount = 0;
   Duration _openedAt = Duration.zero;
 
@@ -58,6 +59,22 @@ class PanelController extends ChangeNotifier {
 
   /// Whether the system paints a translucent material behind the panel.
   bool get hasMaterial => _window.hasMaterial;
+
+  /// While true, the panel stays open when the pointer leaves it or another
+  /// window is clicked; only [dismiss] closes it. For views the user types
+  /// in, where closing by accident would throw the typing away.
+  bool get holdOpen => _holdOpen;
+
+  set holdOpen(bool value) {
+    if (_holdOpen == value) return;
+    _holdOpen = value;
+    final display = _tracker.display;
+    if (!value && _isOpen && display != null) {
+      // Back to closing when the pointer leaves, counted from the next time
+      // it is inside: it may be anywhere right now.
+      _tracker.open(display);
+    }
+  }
 
   /// Prepares the window and starts watching the pointer. Returns false when
   /// there is no window to use, in which case nothing is watched.
@@ -79,7 +96,7 @@ class PanelController extends ChangeNotifier {
 
   /// Samples the pointer once. Called by the timer; public for tests.
   void poll() {
-    if (!_prepared) return;
+    if (!_prepared || (_holdOpen && _isOpen)) return;
     if (_displays.isEmpty || _ticksUntilDisplayRefresh-- <= 0) {
       _refreshDisplays();
     }
@@ -101,11 +118,16 @@ class PanelController extends ChangeNotifier {
   /// Opens the panel if it is closed and closes it if it is open, as a click
   /// on the tray icon does.
   void toggle() {
-    if (!_prepared) return;
     if (_isOpen) {
       dismiss();
-      return;
+    } else {
+      open();
     }
+  }
+
+  /// Opens the panel without the gesture. Does nothing if it is open.
+  void open() {
+    if (!_prepared || _isOpen) return;
     _refreshDisplays();
     if (_displays.isEmpty) return;
     final cursor = _pointer.cursorPosition();
@@ -162,7 +184,7 @@ class PanelController extends ChangeNotifier {
   }
 
   void _onBlur() {
-    if (!_isOpen) return;
+    if (!_isOpen || _holdOpen) return;
     if (_clock() - _openedAt < blurGuard) return;
     dismiss();
   }

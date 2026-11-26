@@ -85,12 +85,14 @@ abstract interface class PanelWindowPort {
 class TrayActions {
   const TrayActions({
     required this.onTogglePanel,
+    required this.onOpenSyncSettings,
     required this.onPausedChanged,
     required this.onClearHistory,
     required this.onQuit,
   });
 
   final void Function() onTogglePanel;
+  final void Function() onOpenSyncSettings;
   final void Function(bool paused) onPausedChanged;
   final void Function() onClearHistory;
   final void Function() onQuit;

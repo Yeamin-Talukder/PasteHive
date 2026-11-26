@@ -3,8 +3,11 @@ import 'package:synchronize_clipboard/src/app_shell.dart';
 import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
 import 'package:synchronize_clipboard/src/history/history_store.dart';
 import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
+import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
+import 'package:synchronize_clipboard/src/sync/sync_service.dart';
 
 import 'fakes.dart';
+import 'sync/memory_network.dart';
 
 void main() {
   late MemoryHistoryStore store;
@@ -14,11 +17,20 @@ void main() {
   late FakeWindow window;
   late PanelController panel;
   late int quitCount;
+  final network = MemoryNetwork();
 
   AppShell buildShell() {
     return AppShell(
       history: history,
       panel: panel,
+      // Sync is never given a key here, so it stays off; its behaviour
+      // through the shell is covered in sync_through_shell_test.dart.
+      sync: SyncService(
+        discovery: network.discovery('10.0.0.1'),
+        transport: network.transport('10.0.0.1'),
+        store: MemorySyncSettingsStore(),
+        defaultDeviceName: () => 'Test PC',
+      ),
       clipboard: clipboard,
       tray: tray,
       onQuit: () async => quitCount++,

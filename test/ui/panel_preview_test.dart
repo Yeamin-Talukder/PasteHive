@@ -14,9 +14,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
+import 'package:synchronize_clipboard/src/sync/sync_service.dart';
 import 'package:synchronize_clipboard/src/ui/clipboard_panel.dart';
+import 'package:synchronize_clipboard/src/ui/sync_settings_view.dart';
 
 import '../fakes.dart';
+import '../sync/memory_network.dart';
+import '../sync/sync_service_test.dart' show eventually;
 
 final _enabled = Platform.environment['PANEL_PREVIEW'] == '1';
 
@@ -27,53 +32,55 @@ Future<void> _loadFonts() async {
     );
   await icons.load();
 
-  // Whatever system UI font this machine has; previews are for eyes only.
-  for (final candidate in const [
+  // Whatever system fonts this machine has; previews are for eyes only.
+  Future<void> loadFirst(String family, List<String> candidates) async {
+    for (final candidate in candidates) {
+      final file = File(candidate);
+      if (!file.existsSync()) continue;
+      final loader = FontLoader(family)
+        ..addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+      await loader.load();
+      return;
+    }
+  }
+
+  await loadFirst('PreviewText', const [
     r'C:\Windows\Fonts\segoeui.ttf',
     '/System/Library/Fonts/SFNS.ttf',
     '/System/Library/Fonts/Helvetica.ttc',
-  ]) {
-    final file = File(candidate);
-    if (!file.existsSync()) continue;
-    final bytes = file.readAsBytesSync();
-    final text = FontLoader('PreviewText')
-      ..addFont(Future.value(ByteData.sublistView(bytes)));
-    await text.load();
-    break;
-  }
+  ]);
+  // The sync key's font; the view asks for Menlo and falls back from there.
+  await loadFirst('Menlo', const [
+    '/System/Library/Fonts/Menlo.ttc',
+    r'C:\Windows\Fonts\consola.ttf',
+  ]);
 }
+
+const _sampleTexts = [
+  'ssh deploy@staging-03.internal',
+  'Notes from the design review\n- tighten the header\n- try a wider search field',
+  'https://developer.apple.com/design/human-interface-guidelines/materials',
+  'The quick brown fox jumps over the lazy dog and keeps going for a while longer',
+  '4111 1111 1111 1111',
+  'final window = WindowManager.instance.getCurrent();',
+  'https://flutter.dev/docs',
+  'Remember to call the dentist',
+  'W:\\Mobile Application\\Synchronize Clipboard',
+];
 
 void main() {
   final boundaryKey = GlobalKey();
 
-  Future<void> render(
+  /// Shows [panel] in a 440x540 frame over a stand-in desktop.
+  Future<void> show(
     WidgetTester tester,
-    String name, {
+    Widget panel, {
     required Brightness brightness,
-    bool hasMaterial = true,
-    List<String>? texts,
-    String query = '',
   }) async {
     await tester.runAsync(_loadFonts);
     tester.view.physicalSize = const Size(1040, 1240);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
-
-    final history = historyWith(
-      texts ??
-          [
-            'ssh deploy@staging-03.internal',
-            'Notes from the design review\n- tighten the header\n- try a wider search field',
-            'https://developer.apple.com/design/human-interface-guidelines/materials',
-            'The quick brown fox jumps over the lazy dog and keeps going for a while longer',
-            '4111 1111 1111 1111',
-            'final window = WindowManager.instance.getCurrent();',
-            'https://flutter.dev/docs',
-            'Remember to call the dentist',
-            'W:\\Mobile Application\\Synchronize Clipboard',
-          ],
-    );
-    if (history.entries.length > 2) history.togglePin(history.entries[2].id);
 
     final dark = brightness == Brightness.dark;
     await tester.pumpWidget(
@@ -83,7 +90,6 @@ void main() {
           debugShowCheckedModeBanner: false,
           theme: ThemeData(brightness: brightness, fontFamily: 'PreviewText'),
           home: DecoratedBox(
-            // Stands in for a blurred desktop behind the window.
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -104,30 +110,17 @@ void main() {
             child: Center(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: SizedBox(
-                  width: 440,
-                  height: 540,
-                  child: ClipboardPanel(
-                    history: history,
-                    reveal: const AlwaysStoppedAnimation(1),
-                    visit: 1,
-                    hasMaterial: hasMaterial,
-                    onCopy: (_) {},
-                    onDismiss: () {},
-                    clock: () => DateTime.utc(2026, 11, 26, 9, 40),
-                  ),
-                ),
+                child: SizedBox(width: 440, height: 540, child: panel),
               ),
             ),
           ),
         ),
       ),
     );
-    if (query.isNotEmpty) {
-      await tester.enterText(find.byType(TextField), query);
-    }
     await tester.pump();
+  }
 
+  Future<void> capture(WidgetTester tester, String name) async {
     final boundary =
         boundaryKey.currentContext!.findRenderObject()!
             as RenderRepaintBoundary;
@@ -142,21 +135,64 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
+  Future<void> list(
+    WidgetTester tester,
+    String name, {
+    required Brightness brightness,
+    bool hasMaterial = true,
+    List<String> texts = _sampleTexts,
+    String query = '',
+    SyncSummary? sync,
+  }) async {
+    final history = historyWith(texts);
+    if (history.entries.length > 2) history.togglePin(history.entries[2].id);
+    await show(
+      tester,
+      ClipboardPanel(
+        history: history,
+        reveal: const AlwaysStoppedAnimation(1),
+        visit: 1,
+        hasMaterial: hasMaterial,
+        onCopy: (_) {},
+        onDismiss: () {},
+        sync: sync,
+        onOpenSync: sync == null ? null : () {},
+        clock: () => DateTime.utc(2026, 11, 26, 9, 40),
+      ),
+      brightness: brightness,
+    );
+    if (query.isNotEmpty) {
+      await tester.enterText(find.byType(TextField), query);
+      await tester.pump();
+    }
+    await capture(tester, name);
+  }
+
   group(
     'previews',
     skip: _enabled ? false : 'set PANEL_PREVIEW=1 to render',
     () {
       testWidgets(
         'dark',
-        (tester) => render(tester, 'dark', brightness: Brightness.dark),
+        (tester) => list(
+          tester,
+          'dark',
+          brightness: Brightness.dark,
+          sync: const SyncSummary(label: 'Sam’s MacBook', connected: true),
+        ),
       );
       testWidgets(
         'light',
-        (tester) => render(tester, 'light', brightness: Brightness.light),
+        (tester) => list(
+          tester,
+          'light',
+          brightness: Brightness.light,
+          sync: const SyncSummary(label: 'Sync Off'),
+        ),
       );
       testWidgets(
         'dark without a material',
-        (tester) => render(
+        (tester) => list(
           tester,
           'dark_opaque',
           brightness: Brightness.dark,
@@ -165,22 +201,74 @@ void main() {
       );
       testWidgets(
         'empty',
-        (tester) => render(
-          tester,
-          'empty',
-          brightness: Brightness.dark,
-          texts: const [],
-        ),
+        (tester) =>
+            list(tester, 'empty', brightness: Brightness.dark, texts: const []),
       );
       testWidgets(
         'no results',
-        (tester) => render(
+        (tester) => list(
           tester,
           'no_results',
           brightness: Brightness.light,
           query: 'zebra',
         ),
       );
+
+      testWidgets('sync settings before a key is set', (tester) async {
+        final network = MemoryNetwork();
+        // Built inside runAsync so all of its work is on the real clock.
+        late final SyncService sync;
+        await tester.runAsync(() async {
+          sync = _device(network, '1', 'OFFICE-PC');
+          await sync.load();
+        });
+        await show(
+          tester,
+          SyncSettingsView(sync: sync, hasMaterial: true, onDone: () {}),
+          brightness: Brightness.dark,
+        );
+        await capture(tester, 'sync_no_key');
+      });
+
+      testWidgets('sync settings with a device connected', (tester) async {
+        final network = MemoryNetwork();
+        late final SyncService sync;
+        late final SyncService other;
+        await tester.runAsync(() async {
+          sync = _device(network, '1', 'OFFICE-PC');
+          other = _device(network, '2', 'Sam’s MacBook');
+          await sync.load();
+          await other.load();
+          await sync.createKey();
+          await other.useKey(sync.formattedKey!);
+          network.announce();
+          await eventually(() => sync.peers.isNotEmpty);
+        });
+        await show(
+          tester,
+          SyncSettingsView(sync: sync, hasMaterial: true, onDone: () {}),
+          brightness: Brightness.light,
+        );
+        await tester.tap(find.text('Show'));
+        await tester.pump();
+        await capture(tester, 'sync_connected');
+        await tester.runAsync(() async {
+          await sync.shutdown();
+          await other.shutdown();
+        });
+      });
     },
+  );
+}
+
+SyncService _device(MemoryNetwork network, String id, String name) {
+  return SyncService(
+    discovery: network.discovery('10.0.0.$id'),
+    transport: network.transport('10.0.0.$id'),
+    store: MemorySyncSettingsStore(
+      SyncSettings(deviceId: id, deviceName: name),
+    ),
+    defaultDeviceName: () => name,
+    pingInterval: const Duration(days: 1),
   );
 }
