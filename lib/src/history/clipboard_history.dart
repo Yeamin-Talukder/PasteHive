@@ -15,6 +15,7 @@ class ClipboardHistory extends ChangeNotifier {
     required this._store,
     DateTime Function()? clock,
     this.maxUnpinnedEntries = 200,
+    this.maxUnpinnedImages = 40,
     this.maxTextLength = 1000000,
     this.saveDelay = const Duration(milliseconds: 400),
   }) : _clock = clock ?? DateTime.now;
@@ -24,6 +25,9 @@ class ClipboardHistory extends ChangeNotifier {
 
   /// Unpinned entries beyond this are dropped, oldest first.
   final int maxUnpinnedEntries;
+
+  /// Unpinned images beyond this are dropped, oldest first.
+  final int maxUnpinnedImages;
 
   /// Copies longer than this many characters are not recorded.
   final int maxTextLength;
@@ -59,19 +63,61 @@ class ClipboardHistory extends ChangeNotifier {
   /// that is null, on this one. Returns false when it was not recorded:
   /// capturing is paused, the text is blank, or it is too long.
   bool record(String text, {String? source}) {
-    if (_paused) return false;
     if (text.trim().isEmpty || text.length > maxTextLength) return false;
+    return _record(
+      (id, now) =>
+          ClipboardEntry(id: id, text: text, copiedAt: now, source: source),
+      source: source,
+    );
+  }
 
+  /// Records a copied image that has been saved as a PNG at [path].
+  bool recordImage({
+    required String path,
+    required int width,
+    required int height,
+    String? source,
+  }) {
+    return _record(
+      (id, now) => ClipboardEntry(
+        id: id,
+        text: '',
+        copiedAt: now,
+        source: source,
+        imagePath: path,
+        imageWidth: width,
+        imageHeight: height,
+      ),
+      source: source,
+    );
+  }
+
+  /// Records copied files and folders, by their full paths.
+  bool recordFiles(List<String> paths) {
+    if (paths.isEmpty) return false;
+    return _record(
+      (id, now) => ClipboardEntry(
+        id: id,
+        text: paths.join('\n'),
+        copiedAt: now,
+        files: List.unmodifiable(paths),
+      ),
+    );
+  }
+
+  // Something copied again moves to the top instead of appearing twice.
+  bool _record(
+    ClipboardEntry Function(String id, DateTime now) build, {
+    String? source,
+  }) {
+    if (_paused) return false;
     final now = _clock().toUtc();
-    final existing = _entries.where((entry) => entry.text == text).firstOrNull;
+    final candidate = build(_newId(now), now);
+    final existing = _entries
+        .where((entry) => entry.signature == candidate.signature)
+        .firstOrNull;
     final next = [
-      existing?.copyWith(copiedAt: now, source: () => source) ??
-          ClipboardEntry(
-            id: _newId(now),
-            text: text,
-            copiedAt: now,
-            source: source,
-          ),
+      existing?.copyWith(copiedAt: now, source: () => source) ?? candidate,
       for (final entry in _entries)
         if (!identical(entry, existing)) entry,
     ];
@@ -100,9 +146,13 @@ class ClipboardHistory extends ChangeNotifier {
   }
 
   /// Puts back an entry that [remove] took out, exactly as it was. Does
-  /// nothing if an entry with that id or that text is in the list again.
+  /// nothing if that entry, or the same thing copied again, is in the list.
   void restore(ClipboardEntry entry) {
-    if (_entries.any((e) => e.id == entry.id || e.text == entry.text)) return;
+    if (_entries.any(
+      (e) => e.id == entry.id || e.signature == entry.signature,
+    )) {
+      return;
+    }
     _commit(_trimmed(_sorted([..._entries, entry])));
   }
 
@@ -129,8 +179,7 @@ class ClipboardHistory extends ChangeNotifier {
     if (words.isEmpty && filter == EntryFilter.all) return _entries;
     return [
       for (final entry in _entries)
-        if (filter.accepts(entry) && _matches(entry.text.toLowerCase(), words))
-          entry,
+        if (filter.accepts(entry) && _matches(_searchable(entry), words)) entry,
     ];
   }
 
@@ -148,6 +197,13 @@ class ClipboardHistory extends ChangeNotifier {
     _saveTimer?.cancel();
     super.dispose();
   }
+
+  // A picture has no text of its own; let the words people would type for
+  // one find it.
+  static String _searchable(ClipboardEntry entry) =>
+      entry.kind == EntryKind.image
+      ? 'image picture photo screenshot'
+      : entry.text.toLowerCase();
 
   static bool _matches(String haystack, List<String> words) {
     for (final word in words) {
@@ -183,9 +239,15 @@ class ClipboardHistory extends ChangeNotifier {
 
   List<ClipboardEntry> _trimmed(List<ClipboardEntry> sorted) {
     var unpinned = 0;
+    var unpinnedImages = 0;
     return [
       for (final entry in sorted)
-        if (entry.pinned || ++unpinned <= maxUnpinnedEntries) entry,
+        if (entry.pinned ||
+            (++unpinned <= maxUnpinnedEntries &&
+                // Images take far more room on disk than text does.
+                (entry.kind != EntryKind.image ||
+                    ++unpinnedImages <= maxUnpinnedImages)))
+          entry,
     ];
   }
 
@@ -201,6 +263,8 @@ enum EntryFilter {
   pinned('Pinned'),
   text('Text'),
   links('Links'),
+  images('Images'),
+  files('Files'),
   emails('Emails'),
   colors('Colors'),
 
@@ -217,6 +281,8 @@ enum EntryFilter {
     EntryFilter.pinned => entry.pinned,
     EntryFilter.text => entry.kind == EntryKind.text,
     EntryFilter.links => entry.kind == EntryKind.link,
+    EntryFilter.images => entry.kind == EntryKind.image,
+    EntryFilter.files => entry.kind == EntryKind.files,
     EntryFilter.emails => entry.kind == EntryKind.email,
     EntryFilter.colors => entry.kind == EntryKind.color,
     EntryFilter.synced => entry.isSynced,

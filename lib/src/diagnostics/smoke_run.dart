@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
@@ -8,7 +9,9 @@ import 'package:flutter/widgets.dart';
 import 'package:nativeapi/nativeapi.dart' as na;
 
 import '../app_shell.dart';
+import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
+import '../history/image_vault.dart';
 import '../history/history_store.dart';
 import '../platform/native_ports.dart';
 
@@ -22,7 +25,8 @@ import '../platform/native_ports.dart';
 /// panel, and quits.
 ///
 /// A check run does not read or show the real clipboard history: the list is
-/// filled with made-up entries (see [demoHistory]) and nothing is saved.
+/// filled with made-up entries (see [demoHistory]) and nothing is saved. It
+/// never picks an entry, so it never pastes anything into another app.
 class SmokeRun {
   SmokeRun({
     required this.outputPath,
@@ -39,8 +43,9 @@ class SmokeRun {
     return (path == null || path.isEmpty) ? null : path;
   }
 
-  /// The list a check run shows instead of the real one.
-  static ClipboardHistory demoHistory() {
+  /// The list a check run shows instead of the real one. Its one picture is
+  /// drawn here and kept in [vault].
+  static Future<ClipboardHistory> demoHistory(ImageVault vault) async {
     final history = ClipboardHistory(store: MemoryHistoryStore());
     for (final text in const [
       'Remember to call the dentist',
@@ -48,14 +53,56 @@ class SmokeRun {
       'final window = WindowManager.instance.getCurrent();',
       'hello@example.com',
       '#FF6B9D',
-      'Notes from the design review\n- tighten the header',
     ]) {
       history.record(text);
     }
     history
+      ..recordFiles(const [r'C:\Projects\report\summary.pdf'])
+      ..recordImage(
+        path: await vault.store(await _demoPicture()),
+        width: _demoWidth,
+        height: _demoHeight,
+      )
       ..record('Copied on the other computer', source: 'MacBook')
-      ..togglePin(history.entries[2].id);
+      ..togglePin(history.entries[4].id);
     return history;
+  }
+
+  static const _demoWidth = 480;
+  static const _demoHeight = 300;
+
+  static Future<Uint8List> _demoPicture() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const size = Size(480, 300);
+    canvas
+      ..drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset.zero,
+            size.bottomRight(Offset.zero),
+            const [Color(0xFF7F5AF0), Color(0xFF2CB67D)],
+          ),
+      )
+      ..drawCircle(
+        const Offset(150, 150),
+        80,
+        Paint()..color = const Color(0xFFFFD166),
+      )
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(260, 90, 160, 120),
+          const Radius.circular(18),
+        ),
+        Paint()..color = const Color(0xFFEF476F),
+      );
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(_demoWidth, _demoHeight);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    picture.dispose();
+    image.dispose();
+    return data!.buffer.asUint8List();
   }
 
   final String outputPath;
@@ -132,6 +179,74 @@ class SmokeRun {
         report['clipboardCaptured'] = shell.history.entries.any(
           (entry) => entry.text == marker,
         );
+        // The same for a picture: put the made-up one on the clipboard and
+        // see it arrive as a new entry at the top.
+        final demo = shell.history.entries.firstWhere(
+          (entry) => entry.kind == EntryKind.image,
+        );
+        report['imageWrite'] = const NativeClipboard().writeImage(
+          demo.imagePath!,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        // Captured means either a second picture entry (the clipboard gave
+        // the picture back encoded differently) or the first one moved up
+        // (it gave back the very same bytes).
+        final pictures = [
+          for (final entry in shell.history.entries)
+            if (entry.kind == EntryKind.image) entry,
+        ];
+        final newest = pictures.reduce(
+          (a, b) => a.copiedAt.isAfter(b.copiedAt) ? a : b,
+        );
+        report['imageCaptured'] = newest.copiedAt.isAfter(demo.copiedAt);
+        report['imageRecognisedAsSame'] = pictures.length == 1;
+        report['imageCapturedSize'] =
+            '${newest.imageWidth}x${newest.imageHeight}';
+        report['captureError'] = shell.lastCaptureError;
+        // What the clipboard itself says it holds right now, step by step.
+        final rawText = await na.Clipboard.instance.readTextAsync();
+        final rawFiles = await na.Clipboard.instance.readFilePathsAsync();
+        final rawImage = await na.Clipboard.instance.readImageAsync();
+        final rawEncoded = rawImage?.toBase64();
+        report['clipboardNow'] = {
+          'textLength': rawText?.length,
+          'fileCount': rawFiles.length,
+          'hasImage': rawImage != null,
+          'imageSize': rawImage == null
+              ? null
+              : '${rawImage.size.width}x${rawImage.size.height}',
+          'imageFormat': rawImage?.format,
+          'encodedLength': rawEncoded?.length,
+          'encodedStart': rawEncoded?.substring(
+            0,
+            rawEncoded.length.clamp(0, 30),
+          ),
+        };
+        rawImage?.dispose();
+        // The same read the app itself makes, including the decoding.
+        try {
+          final read = await const NativeClipboard().readImage();
+          report['appReadsImage'] = read == null
+              ? 'nothing'
+              : '${read.width}x${read.height}, ${read.png.length} bytes';
+        } on Object catch (error) {
+          report['appReadsImage'] = 'failed: $error';
+        }
+        if (rawEncoded != null) {
+          // Exactly why decoding fails, if it does.
+          report['encodedTailCodes'] = rawEncoded.codeUnits
+              .skip((rawEncoded.length - 6).clamp(0, rawEncoded.length))
+              .toList();
+          try {
+            report['decodes'] = '${decodeDataUri(rawEncoded).length} bytes';
+          } on Object catch (error) {
+            report['decodes'] = 'failed: $error';
+          }
+        }
+        report['imageCountAfter'] = shell.history.entries
+            .where((entry) => entry.kind == EntryKind.image)
+            .length;
+
         na.Clipboard.instance.writeText(previous);
         await Future<void>.delayed(const Duration(milliseconds: 300));
       }

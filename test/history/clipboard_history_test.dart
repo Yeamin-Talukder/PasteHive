@@ -334,6 +334,126 @@ void main() {
       expect(texts(history), ['one', 'two']);
     });
   });
+
+  group('pictures and files', () {
+    test('a picture is an entry of its own kind', () {
+      final history = historyWith(['some text'])
+        ..recordImage(path: r'C:\images\abc.png', width: 1920, height: 1080);
+
+      final entry = history.entries.first;
+      expect(entry.kind, EntryKind.image);
+      expect(entry.preview, 'Image');
+      expect(entry.text, isEmpty);
+      expect(entry.imageWidth, 1920);
+    });
+
+    test('the same picture file is recognised when copied again', () {
+      final history = historyWith([])
+        ..recordImage(path: r'C:\images\abc.png', width: 10, height: 10)
+        ..record('text in between')
+        ..recordImage(path: r'C:\images\abc.png', width: 10, height: 10)
+        ..recordImage(path: r'C:\images\def.png', width: 10, height: 10);
+
+      expect(
+        [for (final entry in history.entries) entry.kind],
+        [EntryKind.image, EntryKind.image, EntryKind.text],
+      );
+    });
+
+    test('files are named after the first of them', () {
+      final history = historyWith([]);
+      history.recordFiles([r'C:\Docs\report.pdf']);
+      expect(history.entries.first.preview, 'report.pdf');
+      expect(history.entries.first.kind, EntryKind.files);
+
+      history.recordFiles([r'C:\Docs\a.txt', r'C:\Docs\b.txt']);
+      expect(history.entries.first.preview, 'a.txt and 1 more');
+
+      history.recordFiles(['/home/sam/a', '/home/sam/b', '/home/sam/c']);
+      expect(history.entries.first.preview, 'a and 2 more');
+
+      expect(history.recordFiles(const []), isFalse);
+      expect(history.entries, hasLength(3));
+    });
+
+    test('the same files copied again move up instead of repeating', () {
+      final history = historyWith([])
+        ..recordFiles([r'C:\Docs\report.pdf'])
+        ..record('text')
+        ..recordFiles([r'C:\Docs\report.pdf']);
+      expect(history.entries, hasLength(2));
+      expect(history.entries.first.kind, EntryKind.files);
+    });
+
+    test('have filters of their own, and can be searched for', () {
+      final history = historyWith(['plain text'])
+        ..recordImage(path: r'C:\images\abc.png', width: 10, height: 10)
+        ..recordFiles([r'C:\Docs\Quarterly Report.pdf']);
+
+      expect(history.search('', filter: EntryFilter.images), hasLength(1));
+      expect(history.search('', filter: EntryFilter.files), hasLength(1));
+      expect(
+        history.search('', filter: EntryFilter.text).single.text,
+        'plain text',
+      );
+      expect(history.search('quarterly').single.kind, EntryKind.files);
+      expect(history.search('screenshot').single.kind, EntryKind.image);
+      expect(history.search('image').single.kind, EntryKind.image);
+    });
+
+    test('only so many unpinned pictures are kept', () {
+      final history = ClipboardHistory(
+        store: MemoryHistoryStore(),
+        clock: tickingClock(),
+        maxUnpinnedImages: 2,
+      );
+      history.recordImage(path: 'one.png', width: 1, height: 1);
+      history.togglePin(history.entries.single.id);
+      for (final name in ['two', 'three', 'four']) {
+        history.recordImage(path: '$name.png', width: 1, height: 1);
+      }
+      history.record('text is not counted');
+
+      expect(
+        [for (final entry in history.entries) entry.preview],
+        ['Image', 'text is not counted', 'Image', 'Image'],
+      );
+      expect(
+        [
+          for (final entry in history.entries)
+            if (entry.imagePath != null) entry.imagePath,
+        ],
+        ['one.png', 'four.png', 'three.png'],
+      );
+    });
+
+    test('survive a trip through JSON', () {
+      final history = historyWith([])
+        ..recordImage(
+          path: r'C:\images\abc.png',
+          width: 640,
+          height: 480,
+          source: 'Mac',
+        )
+        ..recordFiles([r'C:\Docs\a.txt', r'C:\Docs\b.txt']);
+
+      for (final entry in history.entries) {
+        expect(ClipboardEntry.fromJson(entry.toJson()), entry);
+      }
+    });
+
+    test('text saved before pictures existed still loads', () {
+      final old = ClipboardEntry.fromJson(const {
+        'id': 'a',
+        'text': 'hello',
+        'copiedAt': 0,
+        'pinned': false,
+      });
+      expect(old.kind, EntryKind.text);
+      expect(old.files, isEmpty);
+      expect(old.imagePath, isNull);
+    });
+  });
 }
 
 class _FailingStore implements HistoryStore {

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 
 import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
@@ -28,6 +30,7 @@ class ClipboardPanel extends StatefulWidget {
     required this.onDismiss,
     this.sync,
     this.onOpenSync,
+    this.pastesOnSelect = false,
     this.clock = DateTime.now,
   });
 
@@ -53,6 +56,10 @@ class ClipboardPanel extends StatefulWidget {
   /// Opens the sync settings.
   final VoidCallback? onOpenSync;
 
+  /// Whether choosing an entry also pastes it into the app the user was
+  /// working in; only changes how the key hint reads.
+  final bool pastesOnSelect;
+
   /// The current time, for "5 min ago". Replaceable so tests are stable.
   final DateTime Function() clock;
 
@@ -63,6 +70,15 @@ class ClipboardPanel extends StatefulWidget {
 class _ClipboardPanelState extends State<ClipboardPanel> {
   static const _listPadding = 4.0;
   static const _undoWindow = Duration(seconds: 5);
+
+  /// The filters that are there even when they would show nothing.
+  static const _alwaysOffered = {
+    EntryFilter.all,
+    EntryFilter.pinned,
+    EntryFilter.text,
+    EntryFilter.links,
+    EntryFilter.images,
+  };
 
   final _search = TextEditingController();
   final _scroll = ScrollController();
@@ -234,7 +250,7 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
     final entries = widget.history.entries;
     return [
       for (final filter in EntryFilter.values)
-        if (filter.index <= EntryFilter.links.index ||
+        if (_alwaysOffered.contains(filter) ||
             filter == _filter ||
             entries.any(filter.accepts))
           filter,
@@ -350,6 +366,7 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
                 paused: widget.history.paused,
                 sync: widget.sync,
                 onOpenSync: widget.onOpenSync,
+                selectVerb: widget.pastesOnSelect ? 'Paste' : 'Copy',
               ),
             ],
           );
@@ -889,7 +906,7 @@ class _EntryRowState extends State<_EntryRow> {
 }
 
 /// The small tile that says what kind of thing an entry is. A colour entry
-/// shows the colour itself.
+/// shows the colour itself, and an image entry a thumbnail of the image.
 class _KindTile extends StatelessWidget {
   const _KindTile({required this.entry, required this.palette, this.size = 34});
 
@@ -900,21 +917,52 @@ class _KindTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final swatch = entry.color;
+    final imagePath = entry.imagePath;
     final (IconData icon, Color tint) = switch (entry.kind) {
       EntryKind.link => (CupertinoIcons.link, palette.linkTint),
       EntryKind.email => (CupertinoIcons.at, palette.emailTint),
       EntryKind.color => (CupertinoIcons.drop, palette.secondaryLabel),
+      EntryKind.image => (CupertinoIcons.photo, palette.secondaryLabel),
+      EntryKind.files => (
+        entry.files.length == 1
+            ? CupertinoIcons.doc
+            : CupertinoIcons.doc_on_doc,
+        palette.fileTint,
+      ),
       EntryKind.text => (CupertinoIcons.text_alignleft, palette.secondaryLabel),
     };
+    final symbol = Icon(icon, size: size * 0.46, color: tint);
+    final radius = BorderRadius.circular(size * 0.3);
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: swatch ?? palette.controlFill,
-        borderRadius: BorderRadius.circular(size * 0.3),
-        border: swatch == null ? null : Border.all(color: palette.separator),
+        borderRadius: radius,
+        border: swatch == null && imagePath == null
+            ? null
+            : Border.all(color: palette.separator),
       ),
-      child: swatch == null ? Icon(icon, size: size * 0.46, color: tint) : null,
+      child: swatch != null
+          ? null
+          : imagePath == null
+          ? symbol
+          : Image.file(
+              File(imagePath),
+              fit: BoxFit.cover,
+              // Decoded small: a list of thumbnails must not hold a
+              // full-size screenshot each.
+              cacheWidth: (size * 3).round(),
+              gaplessPlayback: true,
+              excludeFromSemantics: true,
+              // Until the thumbnail is read from disk, the symbol stands in.
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
+                  frame == null && !wasSynchronouslyLoaded ? symbol : child,
+              // The file can be gone (removed by hand, say); show what kind
+              // of thing it was instead.
+              errorBuilder: (context, error, stackTrace) => symbol,
+            ),
     );
   }
 }
@@ -1083,20 +1131,39 @@ class _PreviewSheet extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: SelectableText(
-                        entry.text,
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: palette.label,
+                  child: entry.imagePath != null
+                      ? Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Image.file(
+                            File(entry.imagePath!),
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                            semanticLabel: 'The copied image',
+                            errorBuilder: (context, error, stackTrace) =>
+                                Center(
+                                  child: Text(
+                                    'This image is no longer available.',
+                                    style: TextStyle(
+                                      color: palette.secondaryLabel,
+                                    ),
+                                  ),
+                                ),
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.all(12),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: SelectableText(
+                              entry.text,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: palette.label,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -1276,11 +1343,15 @@ class _Footer extends StatelessWidget {
     required this.paused,
     required this.sync,
     required this.onOpenSync,
+    required this.selectVerb,
   });
 
   final PanelPalette palette;
   final int count;
   final bool paused;
+
+  /// What Enter does to the selected entry: "Copy" or "Paste".
+  final String selectVerb;
   final SyncSummary? sync;
   final VoidCallback? onOpenSync;
 
@@ -1324,8 +1395,8 @@ class _Footer extends StatelessWidget {
                   // Named as the keys are labelled on each platform's
                   // keyboards.
                   defaultTargetPlatform == TargetPlatform.macOS
-                      ? 'space Preview   return Copy'
-                      : 'Space Preview   Enter Copy',
+                      ? 'space Preview   return $selectVerb'
+                      : 'Space Preview   Enter $selectVerb',
                   textAlign: TextAlign.end,
                   maxLines: 1,
                   overflow: TextOverflow.fade,
@@ -1405,9 +1476,12 @@ String kindLabel(EntryKind kind) => switch (kind) {
   EntryKind.link => 'Link',
   EntryKind.email => 'Email Address',
   EntryKind.color => 'Color',
+  EntryKind.image => 'Image',
+  EntryKind.files => 'Files',
 };
 
-/// A short note on what an entry is: where a link goes, or how much text.
+/// A short note on what an entry is: where a link goes, how big an image is,
+/// where a file lives, or how much text there is.
 String describeEntry(ClipboardEntry entry) {
   switch (entry.kind) {
     case EntryKind.link:
@@ -1416,6 +1490,15 @@ String describeEntry(ClipboardEntry entry) {
       return 'Email address';
     case EntryKind.color:
       return 'Color';
+    case EntryKind.image:
+      final width = entry.imageWidth ?? 0;
+      final height = entry.imageHeight ?? 0;
+      return width > 0 && height > 0 ? '$width × $height' : 'Picture';
+    case EntryKind.files:
+      if (entry.files.length > 1) return '${entry.files.length} items';
+      // The folder a single file is in, which tells files of one name apart.
+      final folder = path.basename(path.dirname(entry.files.single));
+      return folder.isEmpty ? 'File' : 'in $folder';
     case EntryKind.text:
       final lines = entry.lineCount;
       if (lines > 1) return '$lines lines';

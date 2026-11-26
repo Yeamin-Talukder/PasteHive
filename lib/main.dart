@@ -10,6 +10,7 @@ import 'src/app_shell.dart';
 import 'src/diagnostics/smoke_run.dart';
 import 'src/history/clipboard_history.dart';
 import 'src/history/history_store.dart';
+import 'src/history/image_vault.dart';
 import 'src/platform/native_ports.dart';
 import 'src/shell/panel_controller.dart';
 import 'src/sync/network.dart';
@@ -25,9 +26,16 @@ Future<void> main() async {
   final checking = smokePath != null;
 
   final supportDirectory = await getApplicationSupportDirectory();
+  // Copied pictures are kept as files; a self-check keeps its made-up one
+  // out of the real folder.
+  final images = ImageVault(
+    checking
+        ? Directory(path.join(Directory.systemTemp.path, 'syncclip-check'))
+        : Directory(path.join(supportDirectory.path, 'images')),
+  );
   final ClipboardHistory history;
   if (checking) {
-    history = SmokeRun.demoHistory();
+    history = await SmokeRun.demoHistory(images);
   } else {
     history = ClipboardHistory(
       store: JsonFileHistoryStore(
@@ -55,8 +63,11 @@ Future<void> main() async {
     clipboard: const NativeClipboard(),
     tray: NativeTray(),
     onQuit: () async => exit(0),
+    images: images,
     captureAtLaunch: !checking,
   );
+  // Pictures whose entries are gone (deleted, or pushed out by newer ones).
+  unawaited(shell.removeUnusedImages());
 
   final captureKey = checking ? GlobalKey() : null;
   runApp(ClipboardApp(shell: shell, captureKey: captureKey));

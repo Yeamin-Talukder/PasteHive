@@ -270,6 +270,7 @@ class _PanelSceneState extends State<PanelScene>
       onDismiss: widget.controller.dismiss,
       sync: summary,
       onOpenSync: onOpenSync,
+      pastesOnSelect: widget.controller.canPaste,
       clock: widget.clock,
     );
   }

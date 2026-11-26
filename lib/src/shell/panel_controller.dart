@@ -157,6 +157,14 @@ class PanelController extends ChangeNotifier {
     _markClosed();
   }
 
+  /// Whether picking an entry can paste it straight into the app the user
+  /// was working in.
+  bool get canPaste => _window.canPaste;
+
+  /// Hands the keyboard back to the app the user was working in and pastes
+  /// the clipboard there.
+  Future<bool> pasteIntoPreviousWindow() => _window.pasteIntoPreviousWindow();
+
   /// Called by the UI on every frame of the opening and closing animation.
   void setRevealProgress(double progress) {
     final frame = _tracker.panelFrame;

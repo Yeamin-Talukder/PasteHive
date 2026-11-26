@@ -225,13 +225,27 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   }
 
-  ClipboardHistory sampleHistory(List<String> texts) {
+  ClipboardHistory sampleHistory(List<String> texts, String imagePath) {
     final history = historyWith(texts);
     if (history.entries.length > 3) {
-      history.togglePin(history.entries[3].id);
-      history.record('Copied on the other computer', source: 'Sam’s MacBook');
+      history
+        ..togglePin(history.entries[3].id)
+        ..recordFiles([r'C:\Projects\report\summary.pdf'])
+        ..recordImage(path: imagePath, width: 1920, height: 1080)
+        ..record('Copied on the other computer', source: 'Sam’s MacBook');
     }
     return history;
+  }
+
+  /// Gives picture files time to load: that is real work, which the test's
+  /// pretend clock does not wait for.
+  Future<void> loadPictures(WidgetTester tester) async {
+    for (var i = 0; i < 3; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+      await tester.pump();
+    }
   }
 
   Future<void> list(
@@ -245,7 +259,17 @@ void main() {
     SyncSummary? sync,
     Future<void> Function()? then,
   }) async {
-    final history = sampleHistory(texts);
+    late final String imagePath;
+    await tester.runAsync(() async {
+      // The made-up desktop doubles as the made-up screenshot.
+      final image = await _paintDesktop(Brightness.light);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      final file = File('build/previews/sample/screenshot.png');
+      file.parent.createSync(recursive: true);
+      file.writeAsBytesSync(png!.buffer.asUint8List());
+      imagePath = file.absolute.path;
+    });
+    final history = sampleHistory(texts, imagePath);
     await show(
       tester,
       (hasMaterial) => ClipboardPanel(
@@ -269,6 +293,7 @@ void main() {
       await tester.pump();
     }
     await then?.call();
+    await loadPictures(tester);
     await capture(tester, name);
   }
 
@@ -344,6 +369,22 @@ void main() {
         (tester) => list(
           tester,
           'preview_sheet',
+          brightness: Brightness.dark,
+          sync: connected,
+          then: () async {
+            await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+            await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+            await tester.sendKeyEvent(LogicalKeyboardKey.space);
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 500));
+          },
+        ),
+      );
+      testWidgets(
+        'preview of a picture',
+        (tester) => list(
+          tester,
+          'preview_image',
           brightness: Brightness.dark,
           sync: connected,
           then: () async {

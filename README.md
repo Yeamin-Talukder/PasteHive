@@ -12,14 +12,17 @@ others, over the local network, once they share a sync key.
 - Runs with no taskbar button or Dock icon. A tray icon (Windows) or menu bar
   icon (macOS) offers Show Clipboard, Sync Settings, Pause Capturing, start at
   login, Clear History and Quit.
-- Records plain text you copy, newest first, grouped under Pinned, Today,
-  Yesterday, This Week and Earlier. Copying the same text again moves it to
-  the top. Links, email addresses and hex colours are recognised; a colour is
-  shown as a swatch.
+- Records what you copy, newest first, grouped under Pinned, Today,
+  Yesterday, This Week and Earlier: text, pictures (screenshots, images copied
+  from a page or an editor) and files copied in a file manager. Copying the
+  same thing again moves it to the top. Links, email addresses and hex colours
+  are recognised; a colour is shown as a swatch and a picture as a thumbnail.
+- Choosing an entry puts it back on the clipboard and, on Windows, pastes it
+  straight into the field you were working in before the panel opened.
 - Opens when the pointer rests at the top middle of any screen, and closes when
   the pointer leaves, on Esc, or when you click elsewhere.
-- Filters under the search field: All, Pinned, Text, Links, and Emails, Colors
-  and Synced when there is something for them to show.
+- Filters under the search field: All, Pinned, Text, Links, Images, and Files,
+  Emails, Colors and Synced when there is something for them to show.
 - Preview an entry in full, pin it, or delete it. A deleted entry can be
   brought back for a few seconds.
 
@@ -27,7 +30,7 @@ others, over the local network, once they share a sync key.
 | --- | --- |
 | Type | Search |
 | Up / Down | Move through the list |
-| Enter | Copy the selected entry and close |
+| Enter | Paste the selected entry where you were typing (Windows), or copy it (macOS), and close |
 | Space | Preview the selected entry (while the search field is empty) |
 | Tab / Shift+Tab | Next / previous filter |
 | Delete | Delete the selected entry (while the search field is empty) |
@@ -36,6 +39,14 @@ others, over the local network, once they share a sync key.
 | Esc | Close the preview, clear the search, reset the filter, then close |
 
 History is kept in `history.json` in the app's support folder, as plain text.
+Copied pictures are kept as PNG files in an `images` folder beside it (at most
+40 unpinned ones; older ones are deleted). Files are remembered by path only:
+the files themselves are not copied anywhere.
+
+Pasting works by handing the keyboard back to the window that had it and
+sending Ctrl+V. Windows does not deliver that to a program running as
+administrator, so nothing is pasted there; the entry is still on the clipboard.
+On macOS the same thing needs the Accessibility permission and is not done yet.
 
 ### How the glass is drawn
 
@@ -88,8 +99,9 @@ Things to know:
   needs both to be allowed.
 - Networks that keep devices apart (guest Wi-Fi, some office networks) will
   not work.
-- Only new copies are sent. Histories are not merged, and pins and deletions
-  stay on the device they were made on.
+- Only text is sent, and only new copies of it. Pictures and files stay on the
+  device they were copied on. Histories are not merged, and pins and
+  deletions stay on the device they were made on.
 - The sync key is stored in `sync.json` in the app's support folder as plain
   text, next to the history.
 - The protocol is assembled from standard parts but was written for this app
