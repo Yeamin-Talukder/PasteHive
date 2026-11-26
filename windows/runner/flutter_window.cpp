@@ -27,13 +27,10 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  // This app lives in the background: the window is the clipboard panel, and
+  // it stays hidden until the Dart side reveals it (hot edge or tray icon).
+  // The stock runner shows the window on the first frame; that is deliberately
+  // not done here.
   flutter_controller_->ForceRedraw();
 
   return true;
