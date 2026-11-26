@@ -1,4 +1,6 @@
-# Synchronize Clipboard
+# PasteHive
+
+(The project folder and package are still called `synchronize_clipboard`.)
 
 A clipboard manager for Windows and macOS that lives in the background. Push the
 pointer to the top middle of the screen and a panel drops down with everything

@@ -31,6 +31,7 @@ class ClipboardPanel extends StatefulWidget {
     this.sync,
     this.onOpenSync,
     this.pastesOnSelect = false,
+    this.touch = false,
     this.clock = DateTime.now,
   });
 
@@ -59,6 +60,11 @@ class ClipboardPanel extends StatefulWidget {
   /// Whether choosing an entry also pastes it into the app the user was
   /// working in; only changes how the key hint reads.
   final bool pastesOnSelect;
+
+  /// Whether this is a touch screen with no keyboard or pointer. There the
+  /// key hints are left out, and a row's actions are reached by holding it
+  /// (which opens its preview) instead of by hovering over it.
+  final bool touch;
 
   /// The current time, for "5 min ago". Replaceable so tests are stable.
   final DateTime Function() clock;
@@ -367,6 +373,7 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
                 sync: widget.sync,
                 onOpenSync: widget.onOpenSync,
                 selectVerb: widget.pastesOnSelect ? 'Paste' : 'Copy',
+                showKeyHints: !widget.touch,
               ),
             ],
           );
@@ -427,7 +434,7 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
                 entry: entry,
                 palette: palette,
                 now: now,
-                selected: entryIndex == _selected,
+                selected: entryIndex == _selected && !widget.touch,
                 copied: entry.id == _copiedId,
                 onHover: () {
                   if (_selected != entryIndex) {
@@ -785,6 +792,9 @@ class _EntryRowState extends State<_EntryRow> {
             onTapCancel: () => setState(() => _pressed = false),
             onTapUp: (_) => setState(() => _pressed = false),
             onTap: widget.onCopy,
+            // Holding a row opens its preview, where it can be pinned or
+            // deleted: the way to those on a touch screen.
+            onLongPress: widget.onPreview,
             child: AnimatedScale(
               // The row gives a little under the pointer.
               scale: _pressed ? 0.985 : 1,
@@ -1344,6 +1354,7 @@ class _Footer extends StatelessWidget {
     required this.sync,
     required this.onOpenSync,
     required this.selectVerb,
+    required this.showKeyHints,
   });
 
   final PanelPalette palette;
@@ -1352,6 +1363,9 @@ class _Footer extends StatelessWidget {
 
   /// What Enter does to the selected entry: "Copy" or "Paste".
   final String selectVerb;
+
+  /// Whether to say which keys do what; pointless without a keyboard.
+  final bool showKeyHints;
   final SyncSummary? sync;
   final VoidCallback? onOpenSync;
 
@@ -1394,7 +1408,9 @@ class _Footer extends StatelessWidget {
                 child: Text(
                   // Named as the keys are labelled on each platform's
                   // keyboards.
-                  defaultTargetPlatform == TargetPlatform.macOS
+                  !showKeyHints
+                      ? ''
+                      : defaultTargetPlatform == TargetPlatform.macOS
                       ? 'space Preview   return $selectVerb'
                       : 'Space Preview   Enter $selectVerb',
                   textAlign: TextAlign.end,
