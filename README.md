@@ -11,18 +11,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Yeamin-Talukder/synchronize-clipboard?label=release&color=111111"></a>
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Yeamin-Talukder/synchronize-clipboard/total?label=downloads&color=111111"></a>
-  <img alt="Page views" src="https://hits.sh/github.com/Yeamin-Talukder/synchronize-clipboard.svg?label=views&color=111111">
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/forks"><img alt="GitHub forks" src="https://img.shields.io/github/forks/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Yeamin-Talukder/PasteHive?label=release&color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Yeamin-Talukder/PasteHive/total?label=downloads&color=111111"></a>
+  <img alt="Page views" src="https://hits.sh/github.com/Yeamin-Talukder/PasteHive.svg?label=views&color=111111">
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Yeamin-Talukder/PasteHive?color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/forks"><img alt="GitHub forks" src="https://img.shields.io/github/forks/Yeamin-Talukder/PasteHive?color=111111"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/Yeamin-Talukder/PasteHive?color=111111"></a>
   <br>
-  <a href="https://github.com/Yeamin-Talukder/synchronize-clipboard/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
-  <img alt="Repository size" src="https://img.shields.io/github/repo-size/Yeamin-Talukder/synchronize-clipboard?color=111111">
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Yeamin-Talukder/PasteHive?color=111111"></a>
+  <img alt="Repository size" src="https://img.shields.io/github/repo-size/Yeamin-Talukder/PasteHive?color=111111">
   <img alt="Platforms: Windows, macOS, Android" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-111111">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-111111?logo=flutter&logoColor=white">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/Yeamin-Talukder/synchronize-clipboard?color=111111"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/Yeamin-Talukder/PasteHive?color=111111"></a>
 </p>
 
 <p align="center">
@@ -108,7 +108,7 @@ yet be put on the phone's clipboard.
 ## Download
 
 There is no packaged release yet. When there is one, installers will be on the
-[Releases page](https://github.com/Yeamin-Talukder/synchronize-clipboard/releases),
+[Releases page](https://github.com/Yeamin-Talukder/PasteHive/releases),
 and the download badge at the top of this page will start counting. Until then,
 [build it from source](#build-from-source); it takes one command per platform.
 
@@ -215,8 +215,8 @@ platform's own toolchain (Visual Studio for Windows, Xcode for macOS, Android
 Studio for Android).
 
 ```powershell
-git clone https://github.com/Yeamin-Talukder/synchronize-clipboard.git
-cd synchronize-clipboard
+git clone https://github.com/Yeamin-Talukder/PasteHive.git
+cd PasteHive
 flutter pub get
 ```
 
@@ -296,7 +296,7 @@ Everything that touches the operating system is behind an interface in
 ## Contributing
 
 Bug reports and ideas are welcome in
-[Issues](https://github.com/Yeamin-Talukder/synchronize-clipboard/issues).
+[Issues](https://github.com/Yeamin-Talukder/PasteHive/issues).
 For a code change, run `flutter analyze` and `flutter test` before opening a
 pull request.
 
