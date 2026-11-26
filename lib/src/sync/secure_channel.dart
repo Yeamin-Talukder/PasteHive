@@ -63,6 +63,8 @@ class SecureChannel {
     required this.peerId,
     required this.peerName,
     required this.initiatorId,
+    required this.purpose,
+    required this.verificationCode,
   }) : _send = sendKey,
        _receive = receiveKey {
     unawaited(_pump());
@@ -85,13 +87,27 @@ class SecureChannel {
   /// The device that made the connection (as opposed to accepting it).
   final String initiatorId;
 
+  /// What the connection was opened for: [syncPurpose] between devices that
+  /// already share a key, or [pairPurpose] to ask to be let in.
+  final String purpose;
+
+  /// Six digits that both ends of this connection compute alike, and that
+  /// someone sitting between them could not make match. Shown on both
+  /// screens while pairing so the user can see it is the same connection.
+  final String verificationCode;
+
+  static const syncPurpose = 'sync';
+  static const pairPurpose = 'pair';
+
   /// Decrypted messages from the other device. Closes when the connection
   /// ends; a message that fails authentication ends it with an error.
   Stream<Map<String, Object?>> get messages => _messages.stream;
 
   static Future<SecureChannel> open(
     ByteConnection connection, {
-    required SyncKey key,
+    SyncKey? key,
+    SyncKey? Function(String purpose)? keyFor,
+    String purpose = syncPurpose,
     required String deviceId,
     required String deviceName,
     required bool initiator,
@@ -103,7 +119,10 @@ class SecureChannel {
       return await _handshake(
         connection,
         frames,
-        key: key,
+        // The side that connects says what for; the side that answers
+        // picks its key to match.
+        keyFor: keyFor ?? (_) => key,
+        purpose: purpose,
         deviceId: deviceId,
         deviceName: deviceName,
         initiator: initiator,
@@ -161,7 +180,8 @@ class SecureChannel {
   static Future<SecureChannel> _handshake(
     ByteConnection connection,
     StreamIterator<Uint8List> frames, {
-    required SyncKey key,
+    required SyncKey? Function(String purpose) keyFor,
+    required String purpose,
     required String deviceId,
     required String deviceName,
     required bool initiator,
@@ -178,6 +198,7 @@ class SecureChannel {
           for (var i = 0; i < 32; i++) random.nextInt(256),
         ]),
         'eph': base64Encode(ephemeralPublic.bytes),
+        if (initiator) 'purpose': purpose,
       }),
     );
     connection.add(encodeFrame(myHello));
@@ -219,6 +240,16 @@ class SecureChannel {
       );
     }
 
+    final peerPurpose = hello['purpose'];
+    final agreedPurpose = initiator
+        ? purpose
+        : (peerPurpose is String ? peerPurpose : syncPurpose);
+    final key = keyFor(agreedPurpose);
+    if (key == null) {
+      // Asked to sync by a device this one shares no key with.
+      throw const HandshakeException(HandshakeFailure.wrongKey);
+    }
+
     final shared = await x25519.sharedSecretKey(
       keyPair: ephemeral,
       remotePublicKey: SimplePublicKey(peerPublic, type: KeyPairType.x25519),
@@ -228,7 +259,7 @@ class SecureChannel {
       ..add(encodeFrame(initiator ? myHello : theirHello))
       ..add(encodeFrame(initiator ? theirHello : myHello));
     final salt = await Sha256().hash(transcript.takeBytes());
-    final derived = await Hkdf(hmac: Hmac.sha256(), outputLength: 64).deriveKey(
+    final derived = await Hkdf(hmac: Hmac.sha256(), outputLength: 68).deriveKey(
       secretKey: SecretKey([
         ...await shared.extractBytes(),
         ...key.secretBytes,
@@ -239,6 +270,8 @@ class SecureChannel {
     final keys = await derived.extractBytes();
     final initiatorToResponder = _DirectionKey(keys.sublist(0, 32));
     final responderToInitiator = _DirectionKey(keys.sublist(32, 64));
+    final code = ByteData.sublistView(Uint8List.fromList(keys.sublist(64, 68)))
+        .getUint32(0);
     final send = initiator ? initiatorToResponder : responderToInitiator;
     final receive = initiator ? responderToInitiator : initiatorToResponder;
 
@@ -275,6 +308,8 @@ class SecureChannel {
       peerId: peerId,
       peerName: name is String && name.trim().isNotEmpty ? name : peerId,
       initiatorId: initiator ? deviceId : peerId,
+      purpose: agreedPurpose,
+      verificationCode: (code % 1000000).toString().padLeft(6, '0'),
     );
   }
 

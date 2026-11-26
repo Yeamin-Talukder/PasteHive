@@ -278,13 +278,11 @@ class _PanelSceneState extends State<PanelScene>
 
 /// The state of sync in a word or two, for the panel's footer.
 SyncSummary syncSummaryOf(SyncService sync) {
-  if (!sync.hasKey || !sync.enabled) {
-    return const SyncSummary(label: 'Sync Off');
-  }
+  if (!sync.enabled) return const SyncSummary(label: 'Sync Off');
   if (sync.error != null) return const SyncSummary(label: 'Sync Problem');
   final peers = sync.peers;
   return switch (peers.length) {
-    0 => const SyncSummary(label: 'Searching…'),
+    0 => SyncSummary(label: sync.hasKey ? 'Searching…' : 'Sync On'),
     1 => SyncSummary(label: peers.single.name, connected: true),
     final count => SyncSummary(label: '$count Devices', connected: true),
   };

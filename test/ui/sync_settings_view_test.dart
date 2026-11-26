@@ -15,9 +15,7 @@ import 'package:synchronize_clipboard/src/ui/sync_settings_view.dart';
 
 import '../fakes.dart';
 import '../sync/memory_network.dart';
-import '../sync/sync_service_test.dart' show eventually;
-
-const hiddenKey = '•••••-•••••-•••••-•••••';
+import '../sync/sync_service_test.dart' show eventually, pairDevices;
 
 void main() {
   late MemoryNetwork network;
@@ -60,7 +58,7 @@ void main() {
         ),
       );
     });
-    for (var i = 0; i < 600 && !done; i++) {
+    for (var i = 0; i < 800 && !done; i++) {
       await step(tester);
     }
     expect(failure, isNull);
@@ -68,9 +66,9 @@ void main() {
     await tester.pump();
   }
 
-  /// Lets work started by a tap (key derivation, saving) finish.
+  /// Lets work started by a tap finish.
   Future<void> afterTap(WidgetTester tester) async {
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 12; i++) {
       await step(tester);
     }
     await tester.pump();
@@ -98,6 +96,18 @@ void main() {
     });
   }
 
+  /// Both devices on, and each has heard the other.
+  Future<void> bothOn(WidgetTester tester) async {
+    await real(tester, () async {
+      await sync.load();
+      await other.load();
+      await sync.setEnabled(true);
+      await other.setEnabled(true);
+      network.announce();
+      await eventually(() => sync.nearby.isNotEmpty && other.nearby.isNotEmpty);
+    });
+  }
+
   CupertinoSwitch switchOf(WidgetTester tester) =>
       tester.widget<CupertinoSwitch>(find.byType(CupertinoSwitch));
 
@@ -108,168 +118,157 @@ void main() {
     doneCount = 0;
   });
 
-  testWidgets(
-    'without a key it explains what to do and cannot be switched on',
-    (tester) async {
-      await real(tester, sync.load);
-      await pumpView(tester);
-
-      expect(find.text('Create a Key'), findsOneWidget);
-      expect(find.text('Join'), findsOneWidget);
-      expect(
-        find.text('Add a sync key to connect your devices.'),
-        findsOneWidget,
-      );
-      expect(switchOf(tester).value, isFalse);
-      expect(switchOf(tester).onChanged, isNull);
-    },
-  );
-
-  testWidgets('creating a key shows it, switches sync on and starts looking', (
-    tester,
-  ) async {
+  testWidgets('while off it only offers to switch on', (tester) async {
     await real(tester, sync.load);
     await pumpView(tester);
 
-    await tester.tap(find.text('Create a Key'));
-    await afterTap(tester);
+    expect(switchOf(tester).value, isFalse);
+    expect(find.textContaining('Switch on to find'), findsOneWidget);
+    expect(find.text('Nearby Devices'), findsNothing);
+  });
 
-    expect(sync.hasKey, isTrue);
-    expect(find.text(sync.formattedKey!), findsOneWidget);
-    expect(find.text('Hide'), findsOneWidget);
-    expect(switchOf(tester).value, isTrue);
-    expect(
-      find.text('Looking for your other devices on this network…'),
-      findsOneWidget,
-    );
+  testWidgets('switching on starts looking for devices', (tester) async {
+    await real(tester, sync.load);
+    await pumpView(tester);
+
+    await tester.tap(find.byType(CupertinoSwitch));
+    await afterTap(tester);
+    await tester.pumpAndSettle();
+
+    expect(sync.running, isTrue);
+    expect(find.text('Nearby Devices'), findsOneWidget);
+    expect(find.textContaining('Looking for devices'), findsOneWidget);
     expect(find.textContaining('“Office PC”'), findsOneWidget);
     await shutDown(tester);
   });
 
-  testWidgets('a saved key stays hidden until asked for', (tester) async {
-    await real(tester, () async {
-      await sync.load();
-      await sync.createKey();
-    });
+  testWidgets('lists a device nearby with a way to connect', (tester) async {
+    await bothOn(tester);
     await pumpView(tester);
 
-    expect(find.text(hiddenKey), findsOneWidget);
-    expect(find.text(sync.formattedKey!), findsNothing);
-
-    await tester.tap(find.text('Show'));
-    await tester.pump();
-    expect(find.text(sync.formattedKey!), findsOneWidget);
-
-    await tester.tap(find.text('Hide'));
-    await tester.pump();
-    expect(find.text(hiddenKey), findsOneWidget);
+    expect(find.text("Sam's MacBook"), findsOneWidget);
+    expect(find.text('Connect'), findsOneWidget);
+    expect(find.textContaining('No devices yet'), findsOneWidget);
     await shutDown(tester);
   });
 
-  testWidgets('joining needs a complete key', (tester) async {
+  testWidgets('Connect asks the other device and shows the code to compare', (
+    tester,
+  ) async {
+    await bothOn(tester);
+    await pumpView(tester);
+
+    await tester.tap(find.text('Connect'));
+    await real(tester, () => eventually(() => other.requests.isNotEmpty));
+    await afterTap(tester);
+
+    final code = other.requests.single.code;
+    expect(find.textContaining('Waiting for “Sam\'s MacBook”'), findsOneWidget);
+    expect(
+      find.text('${code.substring(0, 3)} ${code.substring(3)}'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await real(tester, () => eventually(() => other.requests.isEmpty));
+    expect(find.textContaining('Waiting for'), findsNothing);
+    await shutDown(tester);
+  });
+
+  testWidgets('a request from another device can be accepted', (tester) async {
+    await bothOn(tester);
+    await pumpView(tester);
+
+    await real(tester, () async {
+      unawaited(other.requestPairing(sync.deviceId));
+      await eventually(() => sync.requests.isNotEmpty);
+    });
+    expect(find.text('“Sam\'s MacBook” wants to sync'), findsOneWidget);
+    final code = sync.requests.single.code;
+    expect(
+      find.text('${code.substring(0, 3)} ${code.substring(3)}'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Accept'));
+    await real(
+      tester,
+      () => eventually(() {
+        network.announce();
+        return sync.peers.isNotEmpty;
+      }),
+    );
+
+    expect(find.textContaining('wants to sync'), findsNothing);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text("Sam's MacBook"), findsOneWidget);
+    // The pairing connection is closed a moment after the answer is sent.
+    await tester.pump(const Duration(seconds: 1));
+    await shutDown(tester);
+  });
+
+  testWidgets('a request can be declined', (tester) async {
+    await bothOn(tester);
+    await pumpView(tester);
+    await real(tester, () async {
+      unawaited(other.requestPairing(sync.deviceId));
+      await eventually(() => sync.requests.isNotEmpty);
+    });
+
+    await tester.tap(find.text('Decline'));
+    await real(
+      tester,
+      () => eventually(() => other.outgoing?.state == OutgoingState.declined),
+    );
+
+    expect(find.textContaining('wants to sync'), findsNothing);
+    expect(sync.hasKey, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    await shutDown(tester);
+  });
+
+  testWidgets('says when the other device declined', (tester) async {
+    await bothOn(tester);
+    await pumpView(tester);
+
+    await tester.tap(find.text('Connect'));
+    await real(tester, () async {
+      await eventually(() => other.requests.isNotEmpty);
+      await other.decline(other.requests.single);
+      await eventually(() => sync.outgoing?.state == OutgoingState.declined);
+    });
+
+    expect(find.text('“Sam\'s MacBook” declined'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pump();
+    expect(find.textContaining('declined'), findsNothing);
+    await shutDown(tester);
+  });
+
+  testWidgets('stopping sync with all devices asks first', (tester) async {
     await real(tester, () async {
       await sync.load();
       await other.load();
-      await other.createKey();
+      await pairDevices(network, sync, other);
     });
     await pumpView(tester);
 
-    await tester.enterText(find.byType(TextField), 'abcde-fghjk');
-    await tester.tap(find.text('Join'));
-    await afterTap(tester);
-    expect(find.textContaining('not a complete key'), findsOneWidget);
-    expect(sync.hasKey, isFalse);
-
-    // Typed the way people type: lower case, spaces instead of dashes.
-    await tester.enterText(
-      find.byType(TextField),
-      other.formattedKey!.toLowerCase().replaceAll('-', ' '),
-    );
-    await tester.tap(find.text('Join'));
-    await afterTap(tester);
-
-    expect(sync.formattedKey, other.formattedKey);
-    expect(find.textContaining('not a complete key'), findsNothing);
-    expect(find.text(hiddenKey), findsOneWidget);
-    await shutDown(tester);
-  });
-
-  testWidgets('removing the key asks first', (tester) async {
-    await real(tester, () async {
-      await sync.load();
-      await sync.createKey();
-    });
-    await pumpView(tester);
-
-    await tester.tap(find.text('Remove Key…'));
+    await tester.ensureVisible(find.text('Stop Syncing with All Devices…'));
+    await tester.tap(find.text('Stop Syncing with All Devices…'));
     await tester.pump();
-    expect(find.text('Sync stops on this device.'), findsOneWidget);
-
+    await tester.ensureVisible(find.text('Cancel'));
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     expect(sync.hasKey, isTrue);
 
-    await tester.tap(find.text('Remove Key…'));
+    await tester.tap(find.text('Stop Syncing with All Devices…'));
     await tester.pump();
-    await tester.tap(find.text('Remove'));
+    await tester.ensureVisible(find.text('Stop'));
+    await tester.tap(find.text('Stop'));
     await afterTap(tester);
 
     expect(sync.hasKey, isFalse);
-    expect(find.text('Create a Key'), findsOneWidget);
-    await shutDown(tester);
-  });
-
-  testWidgets('the switch turns sync off and on', (tester) async {
-    await real(tester, () async {
-      await sync.load();
-      await sync.createKey();
-    });
-    await pumpView(tester);
-
-    await tester.tap(find.byType(CupertinoSwitch));
-    await afterTap(tester);
-    await tester.pumpAndSettle();
-    expect(sync.enabled, isFalse);
-    expect(find.text('Sync is off.'), findsOneWidget);
-
-    await tester.tap(find.byType(CupertinoSwitch));
-    await afterTap(tester);
-    await tester.pumpAndSettle();
-    expect(sync.running, isTrue);
-    await shutDown(tester);
-  });
-
-  testWidgets('lists a connected device by name', (tester) async {
-    await real(tester, () async {
-      await sync.load();
-      await other.load();
-      await sync.createKey();
-      await other.useKey(sync.formattedKey!);
-      network.announce();
-      await eventually(() => sync.peers.isNotEmpty);
-    });
-    await pumpView(tester);
-
-    expect(find.text("Sam's MacBook"), findsOneWidget);
-    expect(find.text('Connected'), findsOneWidget);
-    expect(find.textContaining('Looking for'), findsNothing);
-    await shutDown(tester);
-  });
-
-  testWidgets('points out a nearby device with a different key', (
-    tester,
-  ) async {
-    await real(tester, () async {
-      await sync.load();
-      await other.load();
-      await sync.createKey();
-      await other.createKey();
-      network.announce();
-      await eventually(() => sync.differentKeyNearby);
-    });
-    await pumpView(tester);
-
-    expect(find.textContaining('using a different key'), findsOneWidget);
+    expect(find.text('Stop Syncing with All Devices…'), findsNothing);
     await shutDown(tester);
   });
 
@@ -283,7 +282,7 @@ void main() {
     );
     await real(tester, () async {
       await sync.load();
-      await sync.createKey();
+      await sync.setEnabled(true);
     });
     await pumpView(tester);
 
@@ -306,10 +305,7 @@ void main() {
   testWidgets('fits at the largest text size without overflowing', (
     tester,
   ) async {
-    await real(tester, () async {
-      await sync.load();
-      await sync.createKey();
-    });
+    await bothOn(tester);
     tester.view.physicalSize = const Size(440, 540);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -390,10 +386,7 @@ void main() {
       await real(tester, () async {
         await sync.load();
         await other.load();
-        await sync.createKey();
-        await other.useKey(sync.formattedKey!);
-        network.announce();
-        await eventually(() => sync.peers.isNotEmpty);
+        await pairDevices(network, sync, other);
       });
       await pumpScene(tester);
 
@@ -414,26 +407,26 @@ void main() {
       expect(syncSummaryOf(sync).label, 'Sync Off');
       expect(syncSummaryOf(sync).connected, isFalse);
 
-      await sync.createKey();
-      expect(syncSummaryOf(sync).label, 'Searching…');
+      await sync.setEnabled(true);
+      expect(syncSummaryOf(sync).label, 'Sync On');
 
       await other.load();
-      await other.useKey(sync.formattedKey!);
       final third = device('3', 'Laptop');
       await third.load();
-      await third.useKey(sync.formattedKey!);
-      network.announce();
-      await eventually(() => sync.peers.length == 2);
-      expect(syncSummaryOf(sync).label, '2 Devices');
+      await pairDevices(network, sync, other);
+      expect(syncSummaryOf(sync).label, "Sam's MacBook");
       expect(syncSummaryOf(sync).connected, isTrue);
 
+      await pairDevices(network, third, sync);
+      expect(syncSummaryOf(sync).label, '2 Devices');
+
       await third.shutdown();
-      await eventually(() => sync.peers.length == 1);
-      expect(syncSummaryOf(sync).label, "Sam's MacBook");
+      await other.shutdown();
+      await eventually(() => sync.peers.isEmpty);
+      expect(syncSummaryOf(sync).label, 'Searching…');
 
       await sync.setEnabled(false);
       expect(syncSummaryOf(sync).label, 'Sync Off');
-      await other.shutdown();
     });
   });
 }

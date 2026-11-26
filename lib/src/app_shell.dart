@@ -121,6 +121,8 @@ class AppShell {
 
     trace?.call('loading sync');
     _remoteClips = sync.remoteClips.listen(_applyRemote);
+    // Another device asking to sync is put in front of the user at once.
+    sync.onPairRequest = (_) => openSyncSettings();
     await sync.load();
   }
 
