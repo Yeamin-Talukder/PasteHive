@@ -24,8 +24,15 @@ Future<void> main() async {
   // the real clipboard alone.
   final smokePath = SmokeRun.requestedPath;
   final checking = smokePath != null;
+  // A self-check says how far it got, so a launch that stalls can be traced.
+  void trace(String step) {
+    if (checking) stderr.writeln('[check] $step');
+  }
+
+  trace('started');
 
   final supportDirectory = await getApplicationSupportDirectory();
+  trace('support folder: ${supportDirectory.path}');
   // Copied pictures are kept as files; a self-check keeps its made-up one
   // out of the real folder.
   final images = ImageVault(
@@ -36,6 +43,7 @@ Future<void> main() async {
   final ClipboardHistory history;
   if (checking) {
     history = await SmokeRun.demoHistory(images);
+    trace('demo history ready');
   } else {
     history = ClipboardHistory(
       store: JsonFileHistoryStore(
@@ -66,12 +74,15 @@ Future<void> main() async {
     images: images,
     captureAtLaunch: !checking,
   );
+  shell.trace = trace;
   // Pictures whose entries are gone (deleted, or pushed out by newer ones).
   unawaited(shell.removeUnusedImages());
 
   final captureKey = checking ? GlobalKey() : null;
   runApp(ClipboardApp(shell: shell, captureKey: captureKey));
+  trace('app running');
   await shell.start();
+  trace('shell started: panel=${shell.panelReady} tray=${shell.trayReady}');
 
   if (smokePath != null) {
     unawaited(

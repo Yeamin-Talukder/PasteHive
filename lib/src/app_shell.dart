@@ -80,6 +80,10 @@ class AppShell {
     } while (!identical(pending, _lastCapture));
   }
 
+  /// Called with each step of [start] as it begins; for tracing a launch
+  /// that stalls.
+  void Function(String step)? trace;
+
   /// What went wrong the last time reading the clipboard failed, for
   /// diagnostics; null when it never has.
   String? lastCaptureError;
@@ -91,7 +95,9 @@ class AppShell {
   bool trayReady = false;
 
   Future<void> start() async {
+    trace?.call('preparing the panel window');
     panelReady = panel.start();
+    trace?.call('installing the tray icon');
     panel.addListener(_onPanelChanged);
     page.addListener(_onPageChanged);
     trayReady = _tray.install(
@@ -103,6 +109,7 @@ class AppShell {
         onQuit: () => unawaited(quit()),
       ),
     );
+    trace?.call('watching the clipboard');
     // Pausing can come from anywhere; the tray menu's tick follows it.
     history.addListener(_syncTray);
     if (_clipboard.canWatch) {
@@ -112,6 +119,7 @@ class AppShell {
     if (captureAtLaunch) _capture();
     await _lastCapture;
 
+    trace?.call('loading sync');
     _remoteClips = sync.remoteClips.listen(_applyRemote);
     await sync.load();
   }

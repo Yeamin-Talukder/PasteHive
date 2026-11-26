@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="192 192 640 640">
+  <title>Synchronize Clipboard - concept 3: Loop board (mark only, white)</title>
+  <!-- Transparent background. Same coordinates as the full icon, cropped to the mark. -->
+  <!-- the board outline is the sync loop: two arrows chasing each other -->
+  <g fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round">
+    <path d="M 322 482 V 382 A 90 90 0 0 1 412 292 H 612 A 90 90 0 0 1 702 382 V 428"/>
+    <path d="M 702 582 V 682 A 90 90 0 0 1 612 772 H 412 A 90 90 0 0 1 322 682 V 636"/>
+  </g>
+  <polygon points="644,426 760,426 702,510" fill="#fff"/>
+  <polygon points="380,638 264,638 322,554" fill="#fff"/>
+  <!-- clip -->
+  <rect x="432" y="222" width="160" height="114" rx="38" fill="#fff"/>
+  <!-- copied content -->
+  <g fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round">
+    <path d="M 446 492 H 578"/>
+    <path d="M 446 572 H 532"/>
+  </g>
+</svg>

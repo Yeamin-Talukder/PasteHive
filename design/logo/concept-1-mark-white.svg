@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="192 192 640 640">
+  <title>Synchronize Clipboard - concept 1: Sync board (mark only, white)</title>
+  <!-- Transparent background. Same coordinates as the full icon, cropped to the mark. -->
+  <!-- board outline -->
+  <rect x="312" y="300" width="400" height="470" rx="70" fill="none" stroke="#fff" stroke-width="50"/>
+  <!-- clip -->
+  <rect x="427" y="236" width="170" height="108" rx="36" fill="#fff"/>
+  <!-- sync arrows -->
+  <g fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round">
+    <path d="M 415.5 565 A 98 98 0 0 1 517.1 450.1"/>
+    <path d="M 608.5 531 A 98 98 0 0 1 506.9 645.9"/>
+  </g>
+  <polygon points="519.5,404.2 582.5,464.7 514.7,496.1" fill="#fff"/>
+  <polygon points="504.5,691.8 441.5,631.3 509.3,599.9" fill="#fff"/>
+</svg>
