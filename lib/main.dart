@@ -10,6 +10,7 @@ import 'src/app_shell.dart';
 import 'src/diagnostics/smoke_run.dart';
 import 'src/history/clipboard_history.dart';
 import 'src/history/history_store.dart';
+import 'src/mobile/mobile_main.dart';
 import 'src/history/image_vault.dart';
 import 'src/platform/native_ports.dart';
 import 'src/shell/panel_controller.dart';
@@ -19,6 +20,10 @@ import 'src/sync/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // A phone gets a different app around the same core: no panel, no tray,
+  // and a clipboard it may only look at while on screen.
+  if (Platform.isAndroid || Platform.isIOS) return runPhoneApp();
 
   // A self-check run shows made-up entries and leaves the real history and
   // the real clipboard alone.

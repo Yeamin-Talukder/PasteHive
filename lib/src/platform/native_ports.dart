@@ -342,7 +342,7 @@ class NativePanelWindow implements PanelWindowPort {
 }
 
 class NativeTray implements TrayPort {
-  static const _tooltip = 'Synchronize Clipboard';
+  static const _tooltip = 'PasteHive';
 
   // Native objects are released when their Dart wrappers are collected, so
   // everything the tray needs is held here for as long as the icon is up.
@@ -393,7 +393,7 @@ class NativeTray implements TrayPort {
     _addLoginItem();
     _addItem('Clear History', actions.onClearHistory);
     menu.addSeparator();
-    _addItem('Quit Synchronize Clipboard', actions.onQuit);
+    _addItem('Quit PasteHive', actions.onQuit);
 
     icon.setContextMenu(menu);
     if (Platform.isMacOS) {

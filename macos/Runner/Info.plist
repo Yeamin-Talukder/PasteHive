@@ -27,7 +27,7 @@
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Synchronize Clipboard finds your other devices on this network and sends them the text you copy.</string>
+	<string>PasteHive finds your other devices on this network and sends them the text you copy.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>

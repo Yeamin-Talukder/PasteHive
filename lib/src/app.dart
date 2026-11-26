@@ -16,7 +16,7 @@ class ClipboardApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Synchronize Clipboard',
+      title: 'PasteHive',
       debugShowCheckedModeBanner: false,
       // Light or dark follows the system; there is no switch of our own.
       theme: _theme(Brightness.light),

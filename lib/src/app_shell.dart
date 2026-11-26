@@ -230,6 +230,18 @@ class AppShell {
   static HistoryItem _item(ClipboardEntry entry) =>
       (text: entry.text, copiedAt: entry.copiedAt);
 
+  /// Looks at the clipboard now and records whatever is new on it. For
+  /// systems that do not report clipboard changes, such as a phone, where
+  /// this is called each time the app comes to the front.
+  void captureNow() => _capture();
+
+  /// Records [text] as copied and sends it to the other devices, without it
+  /// having been on this device's clipboard: text shared to the app from
+  /// another one.
+  void addCopied(String text) {
+    if (history.record(text)) _share(text);
+  }
+
   /// Opens the panel on its sync settings.
   void openSyncSettings() {
     _openingSyncSettings = true;
