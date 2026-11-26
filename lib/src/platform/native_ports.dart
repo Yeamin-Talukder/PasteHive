@@ -223,6 +223,7 @@ class NativeTray implements TrayPort {
     }
 
     _addItem('Show Clipboard', actions.onTogglePanel);
+    _addItem('Sync Settings…', actions.onOpenSyncSettings);
     menu.addSeparator();
     _pauseItem = _addItem('Pause Capturing', () {
       _paused = !_paused;

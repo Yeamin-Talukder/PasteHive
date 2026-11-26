@@ -52,6 +52,14 @@ class SmokeRun {
       ],
       'cursor': const NativePointer().cursorPosition().toString(),
       'historyCountAtStart': shell.history.entries.length,
+      // Reported, never changed: the check does not switch sync on.
+      'sync': {
+        'hasKey': shell.sync.hasKey,
+        'enabled': shell.sync.enabled,
+        'running': shell.sync.running,
+        'error': shell.sync.error,
+        'peers': shell.sync.peers.length,
+      },
       'visibleBeforeOpen': window.window?.isVisible,
     };
 

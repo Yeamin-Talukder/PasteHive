@@ -19,6 +19,8 @@ class PanelPalette {
     required this.rowSelected,
     required this.separator,
     required this.accent,
+    required this.danger,
+    required this.positive,
   });
 
   factory PanelPalette.of({
@@ -47,6 +49,8 @@ class PanelPalette {
             ? const Color(0x66FFFFFF)
             : const Color(0x1FFFFFFF),
         accent: const Color(0xFF0A84FF),
+        danger: const Color(0xFFFF6961),
+        positive: const Color(0xFF30D158),
       );
     }
     return PanelPalette._(
@@ -66,6 +70,8 @@ class PanelPalette {
           ? const Color(0x66000000)
           : const Color(0x1A000000),
       accent: const Color(0xFF007AFF),
+      danger: const Color(0xFFC4281C),
+      positive: const Color(0xFF1E8E3E),
     );
   }
 
@@ -86,4 +92,10 @@ class PanelPalette {
   final Color rowSelected;
   final Color separator;
   final Color accent;
+
+  /// Text of an action that takes something away.
+  final Color danger;
+
+  /// The dot beside a connected device.
+  final Color positive;
 }

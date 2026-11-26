@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../app_shell.dart' show PanelPage;
 import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
 import '../shell/panel_controller.dart';
+import '../sync/sync_service.dart';
 import 'clipboard_panel.dart';
+import 'sync_settings_view.dart';
 
-/// Plays the panel's entrance and exit.
+/// Plays the panel's entrance and exit, and switches between its views.
 ///
 /// One animation drives two things at once: the window sliding down from the
 /// top edge (through [PanelController.setRevealProgress]) and the content
@@ -17,12 +20,21 @@ class PanelScene extends StatefulWidget {
     required this.controller,
     required this.history,
     required this.onCopy,
+    this.sync,
+    this.page,
     this.clock = DateTime.now,
   });
 
   final PanelController controller;
   final ClipboardHistory history;
   final ValueChanged<ClipboardEntry> onCopy;
+
+  /// Sync, when the app has it; without it the panel is the list alone.
+  final SyncService? sync;
+
+  /// Which view is showing. Needed together with [sync].
+  final ValueNotifier<PanelPage>? page;
+
   final DateTime Function() clock;
 
   @override
@@ -109,6 +121,38 @@ class _PanelSceneState extends State<PanelScene>
 
   @override
   Widget build(BuildContext context) {
+    final sync = widget.sync;
+    final page = widget.page;
+    if (sync == null || page == null) return _buildList(null, null);
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([sync, page]),
+      builder: (context, _) => AnimatedSwitcher(
+        duration: _reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 200),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: switch (page.value) {
+          PanelPage.history => KeyedSubtree(
+            key: const ValueKey(PanelPage.history),
+            child: _buildList(
+              syncSummaryOf(sync),
+              () => page.value = PanelPage.sync,
+            ),
+          ),
+          PanelPage.sync => SyncSettingsView(
+            key: const ValueKey(PanelPage.sync),
+            sync: sync,
+            hasMaterial: widget.controller.hasMaterial,
+            onDone: () => page.value = PanelPage.history,
+          ),
+        },
+      ),
+    );
+  }
+
+  Widget _buildList(SyncSummary? summary, VoidCallback? onOpenSync) {
     return ClipboardPanel(
       history: widget.history,
       reveal: _reveal,
@@ -116,7 +160,23 @@ class _PanelSceneState extends State<PanelScene>
       hasMaterial: widget.controller.hasMaterial,
       onCopy: widget.onCopy,
       onDismiss: widget.controller.dismiss,
+      sync: summary,
+      onOpenSync: onOpenSync,
       clock: widget.clock,
     );
   }
+}
+
+/// The state of sync in a word or two, for the panel's footer.
+SyncSummary syncSummaryOf(SyncService sync) {
+  if (!sync.hasKey || !sync.enabled) {
+    return const SyncSummary(label: 'Sync Off');
+  }
+  if (sync.error != null) return const SyncSummary(label: 'Sync Problem');
+  final peers = sync.peers;
+  return switch (peers.length) {
+    0 => const SyncSummary(label: 'Searching…'),
+    1 => SyncSummary(label: peers.single.name, connected: true),
+    final count => SyncSummary(label: '$count Devices', connected: true),
+  };
 }
