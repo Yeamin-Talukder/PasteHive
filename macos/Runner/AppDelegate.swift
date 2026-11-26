@@ -12,7 +12,8 @@ class AppDelegate: FlutterAppDelegate {
       options: .userInitiatedAllowingIdleSystemSleep,
       reason: "Watching the clipboard and the top screen edge"
     )
-    super.applicationDidFinishLaunching(notification)
+    // No call to super: FlutterAppDelegate does not implement this method,
+    // and calling it throws at launch.
   }
 
   // The app keeps running from the menu bar when its panel is hidden.

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="192 192 640 640">
+  <title>Synchronize Clipboard - concept 2: Two boards (mark only, black)</title>
+  <!-- Transparent background. Same coordinates as the full icon, cropped to the mark. -->
+  <!-- back board: only the part not covered by the front one -->
+  <path d="M 334 641 A 48 48 0 0 1 286 593 V 337 A 48 48 0 0 1 334 289 H 560 A 48 48 0 0 1 608 337"
+        fill="none" stroke="#000" stroke-width="48" stroke-linecap="round"/>
+  <!-- clip on the back board -->
+  <rect x="372" y="229" width="150" height="102" rx="34" fill="#000"/>
+  <!-- front board, with the two transfer arrows cut out of it -->
+  <path fill="#000" fill-rule="evenodd" d="
+    M 464 395 H 690 A 72 72 0 0 1 762 467 V 723 A 72 72 0 0 1 690 795 H 464 A 72 72 0 0 1 392 723 V 467 A 72 72 0 0 1 464 395 Z
+    M 472 524 H 618 V 497 L 682 543 L 618 589 V 562 H 472 A 19 19 0 0 1 472 524 Z
+    M 682 628 H 536 V 601 L 472 647 L 536 693 V 666 H 682 A 19 19 0 0 0 682 628 Z"/>
+</svg>
