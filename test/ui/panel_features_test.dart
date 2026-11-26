@@ -100,6 +100,10 @@ void main() {
       ]);
       expect(find.text('2 items'), findsOneWidget);
 
+      // Choosing a filter scrolls the row to it; bring the next one back.
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Text', skipOffstage: false));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Text'));
       await tester.pump();
       expect(shownTitles(tester), ['Second note', 'Plain note']);
@@ -133,7 +137,8 @@ void main() {
       await tester.pump();
       expect(shownTitles(tester), ['Second note', 'Plain note']);
 
-      // Past the last one it comes round to All again.
+      // Past the last one (Links, then Images) it comes round to All again.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
@@ -365,6 +370,127 @@ void main() {
       expect(copied, hasLength(1));
       expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOneWidget);
       await settle(tester);
+    });
+  });
+
+  group('pictures and files', () {
+    testWidgets('are listed with their size or where they live', (
+      tester,
+    ) async {
+      history
+        ..recordImage(path: r'C:\gone\abc.png', width: 1920, height: 1080)
+        ..recordFiles([r'C:\Docs\report.pdf']);
+      await pumpPanel(tester);
+
+      expect(find.text('Image'), findsOneWidget);
+      expect(find.textContaining('1920 × 1080'), findsOneWidget);
+      expect(find.text('report.pdf'), findsOneWidget);
+      expect(find.textContaining('in Docs'), findsOneWidget);
+      await settle(tester);
+    });
+
+    testWidgets('have filters: Images always, Files once there are some', (
+      tester,
+    ) async {
+      await pumpPanel(tester);
+      expect(find.text('Images', skipOffstage: false), findsOneWidget);
+      expect(find.text('Files', skipOffstage: false), findsNothing);
+
+      history
+        ..recordImage(path: r'C:\gone\abc.png', width: 10, height: 10)
+        ..recordFiles([r'C:\Docs\a.txt', r'C:\Docs\b.txt']);
+      await tester.pump();
+      expect(find.text('Files', skipOffstage: false), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Images', skipOffstage: false));
+      await tester.tap(find.text('Images'));
+      await tester.pump();
+      expect(find.text('1 item'), findsOneWidget);
+      expect(find.text('Image'), findsOneWidget);
+      await settle(tester);
+    });
+
+    testWidgets('choosing one reports it like any other entry', (tester) async {
+      history.recordImage(path: r'C:\gone\abc.png', width: 10, height: 10);
+      await pumpPanel(tester);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+
+      expect(copied.single.kind, EntryKind.image);
+      await settle(tester);
+    });
+
+    testWidgets('a file entry previews as the list of paths', (tester) async {
+      history.recordFiles([r'C:\Docs\a.txt', r'C:\Docs\b.txt']);
+      await pumpPanel(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Files', skipOffstage: false),
+        findsNWidgets(2),
+        reason: 'chip and title',
+      );
+      expect(find.text('C:\\Docs\\a.txt\nC:\\Docs\\b.txt'), findsOneWidget);
+      await settle(tester);
+    });
+
+    test('notes on pictures and files', () {
+      ClipboardEntry entry({
+        String? imagePath,
+        int? width,
+        int? height,
+        List<String> files = const [],
+      }) => ClipboardEntry(
+        id: 'a',
+        text: files.join('\n'),
+        copiedAt: now(),
+        imagePath: imagePath,
+        imageWidth: width,
+        imageHeight: height,
+        files: files,
+      );
+
+      expect(
+        describeEntry(entry(imagePath: 'a.png', width: 640, height: 480)),
+        '640 × 480',
+      );
+      expect(describeEntry(entry(imagePath: 'a.png')), 'Picture');
+      expect(describeEntry(entry(files: ['/home/sam/notes.txt'])), 'in sam');
+      expect(describeEntry(entry(files: ['/a/b', '/a/c', '/a/d'])), '3 items');
+      expect(kindLabel(EntryKind.image), 'Image');
+    });
+  });
+
+  group('key hint', () {
+    Future<void> pumpWith(WidgetTester tester, {required bool pastes}) async {
+      tester.view.physicalSize = const Size(440, 540);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ClipboardPanel(
+            history: history,
+            reveal: const AlwaysStoppedAnimation(1),
+            visit: 1,
+            hasMaterial: true,
+            onCopy: copied.add,
+            onDismiss: () {},
+            pastesOnSelect: pastes,
+            clock: now,
+          ),
+        ),
+      );
+    }
+
+    testWidgets('says Paste where picking an entry pastes it', (tester) async {
+      await pumpWith(tester, pastes: true);
+      expect(find.textContaining('Enter Paste'), findsOneWidget);
+    });
+
+    testWidgets('says Copy where it only copies', (tester) async {
+      await pumpWith(tester, pastes: false);
+      expect(find.textContaining('Enter Copy'), findsOneWidget);
     });
   });
 

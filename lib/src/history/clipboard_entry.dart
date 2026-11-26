@@ -1,10 +1,11 @@
 import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
-/// What a copied piece of text is, as far as can be told by looking at it.
+/// What a copied thing is.
 enum EntryKind {
-  /// Anything that is not one of the others.
+  /// Text that is not one of the more specific kinds below.
   text,
 
   /// A single web address.
@@ -15,11 +16,15 @@ enum EntryKind {
 
   /// A colour written as a hex code, such as `#1E90FF`.
   color,
+
+  /// A picture: a screenshot, or an image copied from a page or an editor.
+  image,
+
+  /// One or more files or folders, as copied in a file manager.
+  files,
 }
 
-/// One thing that was copied.
-///
-/// Only plain text is recorded for now; [text] is the full copied value.
+/// One thing that was copied: some text, an image, or a set of files.
 @immutable
 class ClipboardEntry {
   const ClipboardEntry({
@@ -28,6 +33,10 @@ class ClipboardEntry {
     required this.copiedAt,
     this.pinned = false,
     this.source,
+    this.imagePath,
+    this.imageWidth,
+    this.imageHeight,
+    this.files = const [],
   });
 
   factory ClipboardEntry.fromJson(Map<String, Object?> json) {
@@ -40,6 +49,12 @@ class ClipboardEntry {
       ),
       pinned: json['pinned'] as bool? ?? false,
       source: json['source'] as String?,
+      imagePath: json['imagePath'] as String?,
+      imageWidth: json['imageWidth'] as int?,
+      imageHeight: json['imageHeight'] as int?,
+      files: [
+        for (final file in json['files'] as List? ?? const []) file as String,
+      ],
     );
   }
 
@@ -51,9 +66,12 @@ class ClipboardEntry {
   );
 
   final String id;
+
+  /// The copied text. For files it is their paths, one per line, so a search
+  /// finds them by name; for an image it is empty.
   final String text;
 
-  /// When this text was last copied, in UTC.
+  /// When this was last copied, in UTC.
   final DateTime copiedAt;
 
   /// Pinned entries sort first and survive "Clear History".
@@ -62,20 +80,57 @@ class ClipboardEntry {
   /// The name of the device this was copied on, or null for this one.
   final String? source;
 
+  /// Where the copied image is kept, as a PNG file; null unless this is an
+  /// image.
+  final String? imagePath;
+
+  /// The image's size in pixels.
+  final int? imageWidth;
+  final int? imageHeight;
+
+  /// The full paths of the copied files and folders; empty unless this is a
+  /// set of files.
+  final List<String> files;
+
   /// Whether this arrived from another device.
   bool get isSynced => source != null;
 
-  /// The first non-empty line, with runs of whitespace collapsed: what a list
-  /// row shows.
+  /// What makes two copies "the same thing", so that copying it again moves
+  /// the entry up instead of adding a second one.
+  String get signature {
+    if (imagePath != null) return 'image:${path.basename(imagePath!)}';
+    if (files.isNotEmpty) return 'files:${files.join('\n')}';
+    return 'text:$text';
+  }
+
+  /// One line that stands for the entry in a list row.
   String get preview {
-    for (final line in text.split('\n')) {
-      final collapsed = line.trim().replaceAll(RegExp(r'\s+'), ' ');
-      if (collapsed.isNotEmpty) return collapsed;
+    switch (kind) {
+      case EntryKind.image:
+        return 'Image';
+      case EntryKind.files:
+        final first = path.basename(files.first);
+        return switch (files.length) {
+          1 => first,
+          2 => '$first and 1 more',
+          final count => '$first and ${count - 1} more',
+        };
+      case EntryKind.text ||
+          EntryKind.link ||
+          EntryKind.email ||
+          EntryKind.color:
+        // The first non-empty line, with runs of whitespace collapsed.
+        for (final line in text.split('\n')) {
+          final collapsed = line.trim().replaceAll(RegExp(r'\s+'), ' ');
+          if (collapsed.isNotEmpty) return collapsed;
+        }
+        return '';
     }
-    return '';
   }
 
   EntryKind get kind {
+    if (imagePath != null) return EntryKind.image;
+    if (files.isNotEmpty) return EntryKind.files;
     final trimmed = text.trim();
     if (trimmed.contains(RegExp(r'\s'))) return EntryKind.text;
     if (_colorPattern.hasMatch(trimmed)) return EntryKind.color;
@@ -119,6 +174,10 @@ class ClipboardEntry {
       copiedAt: copiedAt ?? this.copiedAt,
       pinned: pinned ?? this.pinned,
       source: source == null ? this.source : source(),
+      imagePath: imagePath,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+      files: files,
     );
   }
 
@@ -128,6 +187,10 @@ class ClipboardEntry {
     'copiedAt': copiedAt.toUtc().millisecondsSinceEpoch,
     'pinned': pinned,
     if (source != null) 'source': source,
+    if (imagePath != null) 'imagePath': imagePath,
+    if (imageWidth != null) 'imageWidth': imageWidth,
+    if (imageHeight != null) 'imageHeight': imageHeight,
+    if (files.isNotEmpty) 'files': files,
   };
 
   @override
@@ -137,10 +200,22 @@ class ClipboardEntry {
       other.text == text &&
       other.copiedAt == copiedAt &&
       other.pinned == pinned &&
-      other.source == source;
+      other.source == source &&
+      other.imagePath == imagePath &&
+      other.imageWidth == imageWidth &&
+      other.imageHeight == imageHeight &&
+      listEquals(other.files, files);
 
   @override
-  int get hashCode => Object.hash(id, text, copiedAt, pinned, source);
+  int get hashCode => Object.hash(
+    id,
+    text,
+    copiedAt,
+    pinned,
+    source,
+    imagePath,
+    Object.hashAll(files),
+  );
 
   @override
   String toString() => 'ClipboardEntry($id, pinned: $pinned, "$preview")';

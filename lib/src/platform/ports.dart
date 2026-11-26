@@ -10,7 +10,23 @@ import 'dart:ui';
 
 import 'package:flutter/painting.dart' show EdgeInsets;
 
-/// The system clipboard. Plain text only for now.
+/// A picture read from the clipboard.
+class ClipboardImage {
+  const ClipboardImage({
+    required this.png,
+    required this.width,
+    required this.height,
+  });
+
+  /// The picture, encoded as a PNG file.
+  final Uint8List png;
+
+  /// Its size in pixels.
+  final int width;
+  final int height;
+}
+
+/// The system clipboard: text, pictures, and files.
 abstract interface class ClipboardPort {
   /// Whether the system can tell us when the clipboard changes.
   bool get canWatch;
@@ -22,8 +38,22 @@ abstract interface class ClipboardPort {
   /// The text on the clipboard, or null when it holds none.
   Future<String?> readText();
 
+  /// The files and folders on the clipboard, by full path; empty when it
+  /// holds none.
+  Future<List<String>> readFiles();
+
+  /// The picture on the clipboard, or null when it holds none.
+  Future<ClipboardImage?> readImage();
+
   /// Puts [text] on the clipboard. Returns false when the system refused.
   bool writeText(String text);
+
+  /// Puts the picture in the file at [path] on the clipboard.
+  bool writeImage(String path);
+
+  /// Puts the files and folders at [paths] on the clipboard, as copying
+  /// them in a file manager would.
+  bool writeFiles(List<String> paths);
 }
 
 /// One screen, in logical desktop coordinates (origin at the top left of the
@@ -105,6 +135,15 @@ abstract interface class PanelWindowPort {
   void applyRevealProgress(Rect frame, double progress);
 
   void hide();
+
+  /// Whether [pasteIntoPreviousWindow] can work here.
+  bool get canPaste;
+
+  /// Hands the keyboard back to the window the user was working in before
+  /// the panel opened and pastes the clipboard there. Returns false when
+  /// that could not be done; the clipboard keeps what was put on it either
+  /// way.
+  Future<bool> pasteIntoPreviousWindow();
 
   /// Calls [onBlur] when the window stops being the one receiving keys.
   /// Returns a function that stops listening.

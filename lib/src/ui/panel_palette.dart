@@ -30,6 +30,7 @@ class PanelPalette {
     required this.accent,
     required this.linkTint,
     required this.emailTint,
+    required this.fileTint,
     required this.danger,
     required this.positive,
   });
@@ -70,6 +71,7 @@ class PanelPalette {
         accent: const Color(0xFF0A84FF),
         linkTint: const Color(0xFF64B5FF),
         emailTint: const Color(0xFF63E6BE),
+        fileTint: const Color(0xFFFFC66D),
         danger: const Color(0xFFFF6961),
         positive: const Color(0xFF30D158),
       );
@@ -101,6 +103,7 @@ class PanelPalette {
       accent: const Color(0xFF007AFF),
       linkTint: const Color(0xFF0A6CDB),
       emailTint: const Color(0xFF0B8A6A),
+      fileTint: const Color(0xFFA65E00),
       danger: const Color(0xFFC4281C),
       positive: const Color(0xFF1E8E3E),
     );
@@ -154,6 +157,9 @@ class PanelPalette {
 
   /// The symbol of an entry that is an email address.
   final Color emailTint;
+
+  /// The symbol of an entry that is a file or a set of files.
+  final Color fileTint;
 
   /// Text of an action that takes something away.
   final Color danger;

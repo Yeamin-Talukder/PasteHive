@@ -5,6 +5,7 @@
 /// in `ports.dart` instead.
 library;
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
@@ -37,7 +38,61 @@ class NativeClipboard implements ClipboardPort {
   Future<String?> readText() => na.Clipboard.instance.readTextAsync();
 
   @override
+  Future<List<String>> readFiles() =>
+      na.Clipboard.instance.readFilePathsAsync();
+
+  @override
+  Future<ClipboardImage?> readImage() async {
+    final image = await na.Clipboard.instance.readImageAsync();
+    if (image == null) return null;
+    try {
+      final size = image.size;
+      // The library hands the picture over as a PNG in a data URI.
+      final encoded = image.toBase64();
+      if (encoded == null || size.width < 1 || size.height < 1) return null;
+      return ClipboardImage(
+        png: decodeDataUri(encoded),
+        width: size.width.round(),
+        height: size.height.round(),
+      );
+    } on FormatException {
+      return null;
+    } finally {
+      image.dispose();
+    }
+  }
+
+  @override
   bool writeText(String text) => na.Clipboard.instance.writeText(text);
+
+  @override
+  bool writeImage(String path) {
+    final image = na.Image.fromFile(path);
+    if (image == null) return false;
+    try {
+      return na.Clipboard.instance.writeImage(image);
+    } finally {
+      image.dispose();
+    }
+  }
+
+  @override
+  bool writeFiles(List<String> paths) =>
+      na.Clipboard.instance.writeFilePaths(paths);
+}
+
+/// The bytes of a base64 `data:` URI, or of bare base64.
+///
+/// Encoders differ in the details: some wrap the text into lines, some leave
+/// the padding off or get it wrong, some end the text with a stray
+/// character. Everything that is not a base64 digit is dropped and the
+/// padding is worked out afresh. Throws a [FormatException] when what is
+/// left cannot be base64 (a length no encoding produces).
+Uint8List decodeDataUri(String encoded) {
+  final digits = encoded
+      .substring(encoded.indexOf(',') + 1)
+      .replaceAll(RegExp('[^A-Za-z0-9+/_-]'), '');
+  return base64Decode(base64.normalize(digits));
 }
 
 class NativePointer implements PointerPort {
@@ -83,6 +138,10 @@ class NativePanelWindow implements PanelWindowPort {
   na.Window? _window;
   bool _hasMaterial = false;
   BackdropCapture? _backdrop;
+  int _previousWindow = 0;
+
+  /// Whether the last paste's key events were accepted, for diagnostics.
+  bool? lastPasteSent;
 
   /// The material that ended up behind the panel, for diagnostics.
   na.VisualEffect appliedEffect = na.VisualEffect.none;
@@ -183,6 +242,9 @@ class NativePanelWindow implements PanelWindowPort {
         height: sheet.height,
       );
       final hwnd = window.nativeObject.address;
+      // Who had the keyboard, so a picked entry can be pasted back there.
+      final front = foregroundWindow();
+      if (front != hwnd) _previousWindow = front;
       // Reopened before it had finished closing: the window is still up, so
       // a new picture would have the panel itself in it. Keep the last one.
       if (!window.isVisible || _backdrop == null) {
@@ -229,6 +291,22 @@ class NativePanelWindow implements PanelWindowPort {
 
   @override
   void hide() => _window?.hide();
+
+  // Pasting into another app on macOS means sending it key events, which
+  // needs the Accessibility permission and native code; not done yet.
+  @override
+  bool get canPaste => Platform.isWindows;
+
+  @override
+  Future<bool> pasteIntoPreviousWindow() async {
+    if (!Platform.isWindows) return false;
+    if (!restoreForeground(_previousWindow)) return false;
+    // The other window needs a moment to become active and put the
+    // keyboard back in the field that had it.
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    lastPasteSent = sendPasteKeys();
+    return lastPasteSent!;
+  }
 
   @override
   void Function() watchBlur(void Function() onBlur) {

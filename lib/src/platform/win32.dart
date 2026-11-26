@@ -233,3 +233,55 @@ void leaveWindowUndecorated(int hwnd) {
     calloc.free(value);
   }
 }
+
+final _isWindow = _user32
+    .lookupFunction<Int32 Function(IntPtr), int Function(int)>('IsWindow');
+final _sendInput = _user32
+    .lookupFunction<
+      Uint32 Function(Uint32, Pointer<Uint8>, Int32),
+      int Function(int, Pointer<Uint8>, int)
+    >('SendInput');
+
+/// The window the user is working in right now, or 0 when there is none.
+int foregroundWindow() => _getForegroundWindow();
+
+/// Brings [hwnd] back to the front, as it was before the panel opened.
+/// Returns false if that window no longer exists or will not come forward.
+bool restoreForeground(int hwnd) {
+  if (hwnd == 0 || _isWindow(hwnd) == 0) return false;
+  return _setForegroundWindow(hwnd) != 0;
+}
+
+/// Types Ctrl+V into whatever has the keyboard, which pastes the clipboard
+/// there. Returns whether Windows accepted all four key events.
+///
+/// Windows does not deliver these to a program running as administrator
+/// from one that is not; nothing is pasted there and nothing can be done
+/// about it from here.
+bool sendPasteKeys() {
+  const inputKeyboard = 1;
+  const keyUp = 0x0002;
+  const control = 0x11;
+  const letterV = 0x56;
+  // One INPUT record on 64-bit Windows: a 4-byte type, 4 bytes of padding,
+  // then the 32-byte union, of which a key event uses the first 24.
+  const inputSize = 40;
+  const keys = [(control, 0), (letterV, 0), (letterV, keyUp), (control, keyUp)];
+
+  final inputs = calloc<Uint8>(inputSize * keys.length);
+  try {
+    final data = ByteData.sublistView(
+      inputs.asTypedList(inputSize * keys.length),
+    );
+    for (final (index, (key, flags)) in keys.indexed) {
+      final offset = index * inputSize;
+      data
+        ..setUint32(offset, inputKeyboard, Endian.little)
+        ..setUint16(offset + 8, key, Endian.little)
+        ..setUint32(offset + 12, flags, Endian.little);
+    }
+    return _sendInput(keys.length, inputs, inputSize) == keys.length;
+  } finally {
+    calloc.free(inputs);
+  }
+}
