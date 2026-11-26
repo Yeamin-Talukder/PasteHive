@@ -23,6 +23,7 @@ class PanelSurface extends StatelessWidget {
       hasMaterial: hasMaterial,
       highContrast: MediaQuery.highContrastOf(context),
     );
+    final inShell = GlassScope.isAround(context);
     return Material(
       type: MaterialType.transparency,
       child: DefaultTextStyle(
@@ -35,29 +36,33 @@ class PanelSurface extends StatelessWidget {
           color: palette.label,
         ),
         child: DecoratedBox(
-          decoration: BoxDecoration(color: palette.surface),
+          // Inside a glass shell the tint and the highlight are the shell's.
+          decoration: BoxDecoration(
+            color: inShell ? const Color(0x00000000) : palette.surface,
+          ),
           child: Stack(
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                height: 72,
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          palette.sheen,
-                          palette.sheen.withValues(alpha: 0),
-                        ],
+              if (!inShell)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 72,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            palette.sheen,
+                            palette.sheen.withValues(alpha: 0),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               Positioned.fill(child: builder(context, palette)),
             ],
           ),
@@ -65,6 +70,18 @@ class PanelSurface extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Marks the part of the tree that is drawn on a pane of glass which
+/// already has its tint, so the views inside do not tint it a second time.
+class GlassScope extends InheritedWidget {
+  const GlassScope({super.key, required super.child});
+
+  static bool isAround(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<GlassScope>() != null;
+
+  @override
+  bool updateShouldNotify(GlassScope oldWidget) => false;
 }
 
 /// An icon-only button with a tooltip and a screen-reader label.

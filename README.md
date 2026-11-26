@@ -12,18 +12,51 @@ others, over the local network, once they share a sync key.
 - Runs with no taskbar button or Dock icon. A tray icon (Windows) or menu bar
   icon (macOS) offers Show Clipboard, Sync Settings, Pause Capturing, start at
   login, Clear History and Quit.
-- Records plain text you copy, newest first. Copying the same text again moves
-  it to the top. Entries can be pinned or deleted; pinned ones survive Clear
-  History.
+- Records plain text you copy, newest first, grouped under Pinned, Today,
+  Yesterday, This Week and Earlier. Copying the same text again moves it to
+  the top. Links, email addresses and hex colours are recognised; a colour is
+  shown as a swatch.
 - Opens when the pointer rests at the top middle of any screen, and closes when
   the pointer leaves, on Esc, or when you click elsewhere.
-- Search by typing; arrow keys and Enter work without touching the mouse.
-- The window uses the system's translucent material (acrylic on Windows,
-  vibrancy on macOS) with native rounded corners and shadow. It falls back to
-  an opaque surface where the system has no material or more contrast is
-  requested, and skips the motion when reduced motion is on.
+- Filters under the search field: All, Pinned, Text, Links, and Emails, Colors
+  and Synced when there is something for them to show.
+- Preview an entry in full, pin it, or delete it. A deleted entry can be
+  brought back for a few seconds.
+
+| Key | Does |
+| --- | --- |
+| Type | Search |
+| Up / Down | Move through the list |
+| Enter | Copy the selected entry and close |
+| Space | Preview the selected entry (while the search field is empty) |
+| Tab / Shift+Tab | Next / previous filter |
+| Delete | Delete the selected entry (while the search field is empty) |
+| Ctrl+Z (Cmd+Z) | Bring back the entry just deleted |
+| Ctrl+P (Cmd+P) | Pin or unpin the selected entry |
+| Esc | Close the preview, clear the search, reset the filter, then close |
 
 History is kept in `history.json` in the app's support folder, as plain text.
+
+### How the glass is drawn
+
+The two systems need different approaches.
+
+- **Windows** blurs behind a window only while that window is the active one,
+  and a panel that opens on hover often is not. So the app's window is a
+  transparent sheet and the app draws the glass itself: just before the panel
+  opens it reads the pixels of the screen where the panel will be, blurs them,
+  and draws the panel over that with its own rounded shape, edge highlight and
+  shadow. One spring animates all of it and the window never moves. The
+  picture is taken once per opening, so what is behind the glass does not
+  update while the panel is open.
+- **macOS** blurs behind any window, so there the window itself is the panel,
+  on the system's vibrancy material with the system's corners and shadow.
+  Reading the screen would need the Screen Recording permission and is not
+  done.
+
+Either way the panel falls back to an opaque surface when there is nothing to
+blur or more contrast is requested, and skips the motion when reduced motion
+is on.
 
 ## Sync
 
@@ -84,7 +117,9 @@ Render the panel to PNG files in `build/previews/` without launching the app:
 $env:PANEL_PREVIEW = "1"; flutter test test/ui/panel_preview_test.dart
 ```
 
-Ask the built app to open its panel, report what the system said, and quit:
+Ask the built app to open its panel, report what the system said, save a
+picture of the panel as drawn (`build\smoke.png`, with made-up entries rather
+than your history) and quit:
 
 ```powershell
 $env:SYNC_CLIPBOARD_SMOKE = "$PWD\build\smoke.json"; .\build\windows\x64\runner\Debug\synchronize_clipboard.exe

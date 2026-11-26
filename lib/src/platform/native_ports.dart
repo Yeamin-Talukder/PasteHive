@@ -9,11 +9,13 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show EdgeInsets;
 import 'package:nativeapi/nativeapi.dart' as na;
 import 'package:nativeapi_flutter/nativeapi_flutter.dart' show ImageAsset;
 
 import '../shell/panel_controller.dart';
 import 'ports.dart';
+import 'win32.dart';
 
 class NativeClipboard implements ClipboardPort {
   const NativeClipboard();
@@ -73,16 +75,32 @@ class NativePointer implements PointerPort {
 }
 
 class NativePanelWindow implements PanelWindowPort {
+  /// Room around the panel for the shadow the app draws on Windows. The top
+  /// is only the gap between the screen edge and the panel, so the window
+  /// starts at the very top of the screen.
+  static const _windowsInsets = EdgeInsets.fromLTRB(48, 8, 48, 72);
+
   na.Window? _window;
   bool _hasMaterial = false;
+  BackdropCapture? _backdrop;
 
   /// The material that ended up behind the panel, for diagnostics.
   na.VisualEffect appliedEffect = na.VisualEffect.none;
+
+  /// Whether the last [show] managed to take the keyboard, for diagnostics.
+  bool? tookForeground;
+
+  /// Whether the last [show] got a picture of the screen, for diagnostics.
+  bool? capturedBackdrop;
 
   na.Window? get window => _window;
 
   @override
   bool get hasMaterial => _hasMaterial;
+
+  @override
+  EdgeInsets get chromeInsets =>
+      Platform.isWindows ? _windowsInsets : EdgeInsets.zero;
 
   @override
   bool prepare() {
@@ -102,22 +120,46 @@ class NativePanelWindow implements PanelWindowPort {
       ..isFullScreenable = false
       ..isAlwaysOnTop = true
       ..isVisibleInTaskbar = false
-      ..isVisibleOnAllWorkspaces = true
-      ..hasShadow = true;
+      ..isVisibleOnAllWorkspaces = true;
     if (na.Window.isVisibleOnFullScreenSupported()) {
       window.setVisibleOnFullScreen(true);
     }
+
+    if (Platform.isWindows) {
+      _prepareTransparentSheet(window);
+    } else {
+      _prepareMaterialPanel(window);
+    }
+    return true;
+  }
+
+  // Windows only blurs behind the active window, and a panel that opens on
+  // hover often is not. So the window is made a see-through sheet with
+  // nothing of the system's on it, and the app draws the glass itself.
+  void _prepareTransparentSheet(na.Window window) {
+    window
+      ..setVisualEffect(na.VisualEffect.none)
+      ..backgroundColor = const na.Color(r: 0, g: 0, b: 0, a: 0)
+      ..hasShadow = false;
+    leaveWindowUndecorated(window.nativeObject.address);
+  }
+
+  void _prepareMaterialPanel(na.Window window) {
+    window.hasShadow = true;
     if (na.Window.isCornerPreferenceSupported()) {
       window.setCornerPreference(na.WindowCornerPreference.round);
     }
     if (Platform.isMacOS) {
-      // A non-activating panel takes keys without pulling the app the user is
-      // working in out of the foreground. On Windows the same flag would also
-      // refuse the keyboard, so there the panel is activated like any window.
+      // A non-activating panel takes keys without pulling the app the user
+      // is working in out of the foreground.
       window.isNonActivating = true;
     }
-
-    for (final effect in _preferredEffects) {
+    for (final effect in const [
+      na.VisualEffect.popover,
+      na.VisualEffect.hud,
+      na.VisualEffect.menu,
+      na.VisualEffect.blur,
+    ]) {
       if (na.Window.isVisualEffectSupported(effect) &&
           window.setVisualEffect(effect)) {
         appliedEffect = effect;
@@ -125,33 +167,64 @@ class NativePanelWindow implements PanelWindowPort {
         break;
       }
     }
-    return true;
   }
 
   @override
-  void show(Rect frame) {
+  BackdropCapture? show(Rect frame) {
     final window = _window;
-    if (window == null) return;
+    if (window == null) return null;
+
+    if (Platform.isWindows) {
+      final sheet = chromeInsets.inflateRect(frame);
+      window.bounds = na.Rectangle(
+        x: sheet.left,
+        y: sheet.top,
+        width: sheet.width,
+        height: sheet.height,
+      );
+      final hwnd = window.nativeObject.address;
+      // Reopened before it had finished closing: the window is still up, so
+      // a new picture would have the panel itself in it. Keep the last one.
+      if (!window.isVisible || _backdrop == null) {
+        // Taken while the window is hidden, so it shows what is behind.
+        final pixels = captureBehindWindow(hwnd);
+        _backdrop = pixels == null
+            ? null
+            : BackdropCapture(
+                bgra: pixels.bgra,
+                width: pixels.width,
+                height: pixels.height,
+              );
+      }
+      capturedBackdrop = _backdrop != null;
+      window.show();
+      tookForeground = takeForeground(hwnd);
+      return _backdrop;
+    }
+
     final origin = panelOriginAt(frame, 0);
-    window.bounds = na.Rectangle(
-      x: origin.dx,
-      y: origin.dy,
-      width: frame.width,
-      height: frame.height,
-    );
-    if (_fadesWindow) window.opacity = 0;
     window
+      ..bounds = na.Rectangle(
+        x: origin.dx,
+        y: origin.dy,
+        width: frame.width,
+        height: frame.height,
+      )
+      ..opacity = 0
       ..show()
       ..focus();
+    return null;
   }
 
   @override
   void applyRevealProgress(Rect frame, double progress) {
     final window = _window;
-    if (window == null) return;
+    // On Windows the sheet stays put and the panel moves inside it.
+    if (window == null || Platform.isWindows) return;
     final origin = panelOriginAt(frame, progress);
-    window.position = na.Point(x: origin.dx, y: origin.dy);
-    if (_fadesWindow) window.opacity = progress.clamp(0.0, 1.0);
+    window
+      ..position = na.Point(x: origin.dx, y: origin.dy)
+      ..opacity = progress.clamp(0.0, 1.0);
   }
 
   @override
@@ -166,19 +239,6 @@ class NativePanelWindow implements PanelWindowPort {
     });
     return () => window.removeListener(listenerId);
   }
-
-  /// macOS shows a window with no transition of its own, so the panel fades
-  /// its window in. Windows already fades windows as it shows and hides them.
-  static bool get _fadesWindow => Platform.isMacOS;
-
-  static List<na.VisualEffect> get _preferredEffects => Platform.isMacOS
-      ? const [
-          na.VisualEffect.popover,
-          na.VisualEffect.hud,
-          na.VisualEffect.menu,
-          na.VisualEffect.blur,
-        ]
-      : const [na.VisualEffect.acrylic, na.VisualEffect.blur];
 }
 
 class NativeTray implements TrayPort {

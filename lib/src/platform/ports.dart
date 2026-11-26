@@ -5,7 +5,10 @@
 /// `native_ports.dart`.
 library;
 
+import 'dart:typed_data';
 import 'dart:ui';
+
+import 'package:flutter/painting.dart' show EdgeInsets;
 
 /// The system clipboard. Plain text only for now.
 abstract interface class ClipboardPort {
@@ -55,23 +58,50 @@ abstract interface class PointerPort {
   List<DisplayGeometry> displays();
 }
 
+/// A picture of the screen where the panel's window is about to appear:
+/// four bytes per pixel in BGRA order, top row first.
+class BackdropCapture {
+  const BackdropCapture({
+    required this.bgra,
+    required this.width,
+    required this.height,
+  });
+
+  final Uint8List bgra;
+  final int width;
+  final int height;
+}
+
 /// The app's one window, used as the clipboard panel.
+///
+/// There are two ways the panel gets its looks. Where the system can draw a
+/// translucent material behind a window that is not the active one (macOS),
+/// the window is the panel: [chromeInsets] is zero and [hasMaterial] is
+/// true. Elsewhere (Windows) the window is a transparent sheet somewhat
+/// larger than the panel, and the app draws the panel on it, glass, corners
+/// and shadow included, over the picture [show] returns.
 abstract interface class PanelWindowPort {
   /// Makes the window a floating, frameless panel that stays out of the
   /// taskbar. Call once before anything else. Returns false when there is no
   /// window to work with.
   bool prepare();
 
-  /// Whether the system draws a translucent material behind the content. When
-  /// false the content has to paint its own opaque background.
+  /// Whether the system draws a translucent material behind the content.
   bool get hasMaterial;
 
-  /// Puts the window on screen at the start of its entrance, where
-  /// [applyRevealProgress] with 0 would leave it.
-  void show(Rect frame);
+  /// How much larger than the panel the window is on each side, to leave
+  /// room for the shadow the app draws. Zero when the system draws the
+  /// panel's shape and shadow.
+  EdgeInsets get chromeInsets;
+
+  /// Puts the window on screen for a panel resting at [frame], at the start
+  /// of its entrance. Returns a picture of what was on screen there just
+  /// before, where the app draws its own glass and could take one.
+  BackdropCapture? show(Rect frame);
 
   /// Moves the window along its entrance: [progress] 0 is just off its
-  /// resting place and 1 is at [frame]. Values past 1 overshoot.
+  /// resting place and 1 is at [frame]. Values past 1 overshoot. Does
+  /// nothing where the app animates the panel inside a still window.
   void applyRevealProgress(Rect frame, double progress);
 
   void hide();

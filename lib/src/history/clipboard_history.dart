@@ -55,17 +55,23 @@ class ClipboardHistory extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Records [text] as just copied. Returns false when it was not recorded:
+  /// Records [text] as just copied, on the device named [source] or, when
+  /// that is null, on this one. Returns false when it was not recorded:
   /// capturing is paused, the text is blank, or it is too long.
-  bool record(String text) {
+  bool record(String text, {String? source}) {
     if (_paused) return false;
     if (text.trim().isEmpty || text.length > maxTextLength) return false;
 
     final now = _clock().toUtc();
     final existing = _entries.where((entry) => entry.text == text).firstOrNull;
     final next = [
-      existing?.copyWith(copiedAt: now) ??
-          ClipboardEntry(id: _newId(now), text: text, copiedAt: now),
+      existing?.copyWith(copiedAt: now, source: () => source) ??
+          ClipboardEntry(
+            id: _newId(now),
+            text: text,
+            copiedAt: now,
+            source: source,
+          ),
       for (final entry in _entries)
         if (!identical(entry, existing)) entry,
     ];
@@ -93,6 +99,13 @@ class ClipboardHistory extends ChangeNotifier {
     );
   }
 
+  /// Puts back an entry that [remove] took out, exactly as it was. Does
+  /// nothing if an entry with that id or that text is in the list again.
+  void restore(ClipboardEntry entry) {
+    if (_entries.any((e) => e.id == entry.id || e.text == entry.text)) return;
+    _commit(_trimmed(_sorted([..._entries, entry])));
+  }
+
   /// Removes everything that is not pinned.
   void clearUnpinned() {
     final next = [
@@ -102,17 +115,22 @@ class ClipboardHistory extends ChangeNotifier {
     if (next.length != _entries.length) _commit(next);
   }
 
-  /// Entries whose text contains every word of [query], ignoring case.
-  List<ClipboardEntry> search(String query) {
+  /// Entries that pass [filter] and whose text contains every word of
+  /// [query], ignoring case.
+  List<ClipboardEntry> search(
+    String query, {
+    EntryFilter filter = EntryFilter.all,
+  }) {
     final words = query
         .toLowerCase()
         .split(RegExp(r'\s+'))
         .where((word) => word.isNotEmpty)
         .toList();
-    if (words.isEmpty) return _entries;
+    if (words.isEmpty && filter == EntryFilter.all) return _entries;
     return [
       for (final entry in _entries)
-        if (_matches(entry.text.toLowerCase(), words)) entry,
+        if (filter.accepts(entry) && _matches(entry.text.toLowerCase(), words))
+          entry,
     ];
   }
 
@@ -175,4 +193,32 @@ class ClipboardHistory extends ChangeNotifier {
     _idCounter++;
     return '${now.microsecondsSinceEpoch.toRadixString(36)}-$_idCounter';
   }
+}
+
+/// The ways the list can be narrowed down, besides searching.
+enum EntryFilter {
+  all('All'),
+  pinned('Pinned'),
+  text('Text'),
+  links('Links'),
+  emails('Emails'),
+  colors('Colors'),
+
+  /// Copied on another device.
+  synced('Synced');
+
+  const EntryFilter(this.label);
+
+  /// The name shown on the filter's chip.
+  final String label;
+
+  bool accepts(ClipboardEntry entry) => switch (this) {
+    EntryFilter.all => true,
+    EntryFilter.pinned => entry.pinned,
+    EntryFilter.text => entry.kind == EntryKind.text,
+    EntryFilter.links => entry.kind == EntryKind.link,
+    EntryFilter.emails => entry.kind == EntryKind.email,
+    EntryFilter.colors => entry.kind == EntryKind.color,
+    EntryFilter.synced => entry.isSynced,
+  };
 }

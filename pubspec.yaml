@@ -19,6 +19,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   cryptography: ^2.9.0
+  ffi: ^2.2.0
 
 dev_dependencies:
   flutter_test:

@@ -22,7 +22,11 @@ class AppShell {
     required this._clipboard,
     required this._tray,
     required this._onQuit,
+    this.captureAtLaunch = true,
   });
+
+  /// Whether whatever is on the clipboard when the app starts goes into the
+  /// list. Off for a self-check, which must not show real clipboard content.
 
   final ClipboardHistory history;
   final PanelController panel;
@@ -30,6 +34,7 @@ class AppShell {
   final ClipboardPort _clipboard;
   final TrayPort _tray;
   final Future<void> Function() _onQuit;
+  final bool captureAtLaunch;
 
   /// The view the panel shows. It goes back to the list each time the panel
   /// is opened by the gesture.
@@ -71,7 +76,7 @@ class AppShell {
       _stopWatchingClipboard = _clipboard.watch(_capture);
     }
     // Whatever is on the clipboard at launch belongs in the list too.
-    _capture();
+    if (captureAtLaunch) _capture();
     await _lastCapture;
 
     _remoteClips = sync.remoteClips.listen(_applyRemote);
@@ -144,6 +149,6 @@ class AppShell {
     if (history.paused || clip.text == _sharedText) return;
     _sharedText = clip.text;
     _clipboard.writeText(clip.text);
-    history.record(clip.text);
+    history.record(clip.text, source: clip.fromName);
   }
 }
