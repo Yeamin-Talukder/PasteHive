@@ -157,6 +157,18 @@ class ClipboardHistory extends ChangeNotifier {
     return true;
   }
 
+  /// Removes the picture stored under the file name [name] because another
+  /// device deleted it. Returns whether there was one.
+  bool removeRemoteImage(String name) {
+    final next = [
+      for (final entry in _entries)
+        if (entry.signature != 'image:$name') entry,
+    ];
+    if (next.length == _entries.length) return false;
+    _commit(next);
+    return true;
+  }
+
   /// Removes everything unpinned because another device cleared its
   /// history.
   void clearRemote() => _clearUnpinned();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -91,6 +92,22 @@ class RemoteClip {
   final String fromName;
 }
 
+/// A picture that was copied on another device.
+@immutable
+class RemoteImage {
+  const RemoteImage({
+    required this.png,
+    required this.width,
+    required this.height,
+    required this.fromName,
+  });
+
+  final Uint8List png;
+  final int width;
+  final int height;
+  final String fromName;
+}
+
 /// An entry of another device's history, sent so this one has it too.
 @immutable
 class RemoteHistoryEntry {
@@ -136,6 +153,7 @@ class SyncService extends ChangeNotifier {
     this.nearbyMemory = const Duration(seconds: 12),
     this.pairingTimeout = const Duration(seconds: 90),
     this.maxTextLength = 1000000,
+    this.maxImageBytes = 5 * 1024 * 1024,
   }) : _random = random ?? Random.secure(),
        _clock = clock ?? _stopwatchClock();
 
@@ -165,8 +183,14 @@ class SyncService extends ChangeNotifier {
   /// Longer text is neither sent nor accepted.
   final int maxTextLength;
 
+  /// Pictures whose PNG file is larger than this are neither sent nor
+  /// accepted: one has to fit in a single message.
+  final int maxImageBytes;
+
   final _remoteClips = StreamController<RemoteClip>.broadcast();
   final _remoteDeletes = StreamController<String>.broadcast();
+  final _remoteImages = StreamController<RemoteImage>.broadcast();
+  final _remoteImageDeletes = StreamController<String>.broadcast();
   final _remoteClears = StreamController<void>.broadcast();
   final _remoteHistory = StreamController<RemoteHistoryEntry>.broadcast();
 
@@ -238,6 +262,13 @@ class SyncService extends ChangeNotifier {
 
   /// Text copied on other devices, as it arrives.
   Stream<RemoteClip> get remoteClips => _remoteClips.stream;
+
+  /// Pictures copied on other devices, as they arrive.
+  Stream<RemoteImage> get remoteImages => _remoteImages.stream;
+
+  /// The file names of pictures deleted from the history on another
+  /// device.
+  Stream<String> get remoteImageDeletes => _remoteImageDeletes.stream;
 
   /// Text that was deleted from the history on another device.
   Stream<String> get remoteDeletes => _remoteDeletes.stream;
@@ -395,6 +426,26 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Sends the picture [png] to every connected device. Returns false,
+  /// sending nothing, when it is too large.
+  bool sendImage(Uint8List png, {required int width, required int height}) {
+    if (png.isEmpty || png.length > maxImageBytes) return false;
+    if (_sessions.isEmpty) return true;
+    _broadcast({
+      'type': 'image',
+      'png': base64Encode(png),
+      'w': width,
+      'h': height,
+    });
+    return true;
+  }
+
+  /// Tells every connected device that the picture stored under [name] was
+  /// deleted here. Pictures are named after their contents, so the name is
+  /// the same on every device.
+  void sendImageDelete(String name) =>
+      _broadcast({'type': 'delete-image', 'name': name});
+
   /// Tells every connected device that [text] was deleted here.
   void sendDelete(String text) => _broadcast({'type': 'delete', 'text': text});
 
@@ -456,6 +507,8 @@ class SyncService extends ChangeNotifier {
   void dispose() {
     unawaited(_remoteClips.close());
     unawaited(_remoteDeletes.close());
+    unawaited(_remoteImages.close());
+    unawaited(_remoteImageDeletes.close());
     unawaited(_remoteClears.close());
     unawaited(_remoteHistory.close());
     super.dispose();
@@ -726,6 +779,35 @@ class SyncService extends ChangeNotifier {
           _remoteClips.add(
             RemoteClip(text: text, fromName: session.channel.peerName),
           );
+        }
+      case 'image':
+        final encoded = message['png'];
+        final width = message['w'];
+        final height = message['h'];
+        if (encoded is! String ||
+            width is! int ||
+            height is! int ||
+            // Four characters of base64 carry three bytes.
+            encoded.length > maxImageBytes * 4 ~/ 3 + 4 ||
+            _remoteImages.isClosed) {
+          break;
+        }
+        try {
+          _remoteImages.add(
+            RemoteImage(
+              png: base64Decode(encoded),
+              width: width,
+              height: height,
+              fromName: session.channel.peerName,
+            ),
+          );
+        } on FormatException {
+          // Not a picture after all; nothing to show.
+        }
+      case 'delete-image':
+        final name = message['name'];
+        if (name is String && !_remoteImageDeletes.isClosed) {
+          _remoteImageDeletes.add(name);
         }
       case 'delete':
         final text = message['text'];

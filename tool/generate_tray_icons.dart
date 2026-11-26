@@ -2,6 +2,11 @@
 //
 //   dart run tool/generate_tray_icons.dart
 //
+// SUPERSEDED: the tray icons in assets/tray/ now come from the logo, as
+// copies of design/logo/export/tray/ (sources: design/logo/
+// concept-3-tray-*.svg). Running this tool overwrites them with the older
+// clipboard drawing described below.
+//
 // The icon is a clipboard: a rounded board with a clip at the top and two
 // lines of "text". It is drawn large and scaled down so the edges come out
 // smooth. Two versions are written:

@@ -1,4 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
+import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
+import 'package:synchronize_clipboard/src/history/image_vault.dart';
+import 'package:synchronize_clipboard/src/platform/ports.dart';
 import 'package:synchronize_clipboard/src/app_shell.dart';
 import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
 import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
@@ -34,12 +41,24 @@ class Computer {
       clipboard: clipboard,
       tray: tray,
       onQuit: () async {},
+      images: ImageVault(imageFolder),
+      readRetryDelay: const Duration(milliseconds: 1),
     );
   }
 
   final ClipboardHistory history;
   final SyncService sync;
   final clipboard = FakeClipboard();
+
+  /// Where this computer keeps copied pictures.
+  final Directory imageFolder = Directory.systemTemp.createTempSync(
+    'sync_shell_test',
+  );
+
+  List<ClipboardEntry> get pictures => [
+    for (final entry in history.entries)
+      if (entry.kind == EntryKind.image) entry,
+  ];
   final tray = FakeTray();
   final window = FakeWindow();
   final pointer = FakePointer();
@@ -61,6 +80,8 @@ void main() {
     addTearDown(() async {
       await mac.shell.quit();
       await pc.shell.quit();
+      mac.imageFolder.deleteSync(recursive: true);
+      pc.imageFolder.deleteSync(recursive: true);
     });
     await mac.shell.start();
     await pc.shell.start();
@@ -418,6 +439,146 @@ void main() {
       await eventually(() => pc.texts.length == 122);
 
       expect(pc.texts, mac.texts);
+    });
+  });
+
+  group('pictures', () {
+    // Stand-ins for two different pictures; they are never decoded here.
+    final first = ClipboardImage(
+      png: Uint8List.fromList(List.generate(4000, (i) => i % 251)),
+      width: 800,
+      height: 600,
+    );
+    final second = ClipboardImage(
+      png: Uint8List.fromList(List.generate(4000, (i) => i % 241)),
+      width: 320,
+      height: 200,
+    );
+
+    test('a picture copied on one computer lands on the other', () async {
+      await pair();
+
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+
+      final received = pc.pictures.single;
+      expect(File(received.imagePath!).readAsBytesSync(), first.png);
+      expect(received.imageWidth, 800);
+      expect(received.imageHeight, 600);
+      expect(received.source, 'Mac');
+      expect(pc.clipboard.writtenImages, [received.imagePath]);
+      // Named after its contents, so both computers call it the same.
+      expect(
+        path.basename(received.imagePath!),
+        path.basename(mac.pictures.single.imagePath!),
+      );
+    });
+
+    test('a picture does not bounce back and forth', () async {
+      await pair();
+      // The clipboard hands a written picture back re-encoded.
+      pc.clipboard.imageWrittenBack = second;
+
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+      await settle();
+      final after = trafficCount();
+      await settle();
+
+      expect(trafficCount(), after);
+      expect(mac.pictures, hasLength(1));
+      expect(pc.pictures, hasLength(1));
+      expect(mac.clipboard.writtenImages, isEmpty);
+    });
+
+    test('text and pictures can follow each other in any order', () async {
+      await pair();
+
+      mac.clipboard.copyFromElsewhere('some text');
+      await eventually(() => pc.texts.contains('some text'));
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+      mac.clipboard.copyFromElsewhere('some text');
+      await eventually(() => pc.clipboard.text == 'some text');
+
+      expect(pc.history.entries.first.text, 'some text');
+    });
+
+    test('picking an old picture sends it again', () async {
+      await pair();
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+      mac.clipboard.copyImageFromElsewhere(second);
+      await eventually(() => pc.pictures.length == 2);
+
+      mac.shell.copy(mac.pictures.last);
+      await eventually(() => pc.clipboard.writtenImages.length == 3);
+
+      expect(
+        path.basename(pc.clipboard.writtenImages.last),
+        path.basename(mac.pictures.first.imagePath!),
+      );
+      expect(pc.pictures, hasLength(2));
+    });
+
+    test('a deleted picture goes from the other computer too', () async {
+      await pair();
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+
+      pc.history.remove(pc.pictures.single.id);
+      await eventually(() => mac.pictures.isEmpty);
+
+      expect(pc.pictures, isEmpty);
+    });
+
+    test('bringing a deleted picture back restores it everywhere', () async {
+      await pair();
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => pc.pictures.isNotEmpty);
+      final removed = mac.pictures.single;
+      mac.history.remove(removed.id);
+      await eventually(() => pc.pictures.isEmpty);
+
+      mac.history.restore(removed);
+      await eventually(() => pc.pictures.isNotEmpty);
+
+      expect(mac.pictures.single, removed);
+    });
+
+    test('a picture too large to send stays where it was copied', () async {
+      await pair();
+      final huge = ClipboardImage(
+        png: Uint8List(mac.sync.maxImageBytes + 1),
+        width: 8000,
+        height: 6000,
+      );
+
+      mac.clipboard.copyImageFromElsewhere(huge);
+      await eventually(() => mac.pictures.isNotEmpty);
+      await settle();
+
+      expect(pc.pictures, isEmpty);
+    });
+
+    test('nothing is sent or taken in while paused', () async {
+      await pair();
+      pc.history.paused = true;
+
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => mac.pictures.isNotEmpty);
+      await settle();
+
+      expect(pc.pictures, isEmpty);
+      expect(pc.clipboard.writtenImages, isEmpty);
+    });
+
+    test('a picture is not sent before the computers are paired', () async {
+      mac.clipboard.copyImageFromElsewhere(first);
+      await eventually(() => mac.pictures.isNotEmpty);
+      await settle();
+
+      expect(network.links, isEmpty);
     });
   });
 }
