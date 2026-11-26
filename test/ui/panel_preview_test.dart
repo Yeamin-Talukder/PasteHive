@@ -24,7 +24,7 @@ import 'package:synchronize_clipboard/src/ui/sync_settings_view.dart';
 
 import '../fakes.dart';
 import '../sync/memory_network.dart';
-import '../sync/sync_service_test.dart' show eventually;
+import '../sync/sync_service_test.dart' show pairDevices;
 
 final _enabled = Platform.environment['PANEL_PREVIEW'] == '1';
 
@@ -410,7 +410,7 @@ void main() {
         ),
       );
 
-      testWidgets('sync settings before a key is set', (tester) async {
+      testWidgets('sync settings with a request waiting', (tester) async {
         final network = MemoryNetwork();
         // Built inside runAsync so all of its work is on the real clock.
         late final SyncService sync;
@@ -439,10 +439,7 @@ void main() {
           other = _device(network, '2', 'Sam’s MacBook');
           await sync.load();
           await other.load();
-          await sync.createKey();
-          await other.useKey(sync.formattedKey!);
-          network.announce();
-          await eventually(() => sync.peers.isNotEmpty);
+          await pairDevices(network, sync, other);
         });
         await show(
           tester,
@@ -453,8 +450,6 @@ void main() {
           ),
           brightness: Brightness.light,
         );
-        await tester.tap(find.text('Show'));
-        await tester.pump();
         await capture(tester, 'sync_connected');
         await tester.runAsync(() async {
           await sync.shutdown();

@@ -32,6 +32,7 @@ class MemoryNetwork {
         to._controller.add(
           PeerAnnouncement(
             deviceId: from._self!.deviceId,
+            name: from._self!.name,
             address: from.address,
             port: from._self!.port,
             tag: from._self!.tag,
@@ -63,11 +64,13 @@ class MemoryDiscovery implements Discovery {
   @override
   Future<void> start({
     required String deviceId,
+    required String name,
     required int port,
     required String tag,
   }) async {
     _self = PeerAnnouncement(
       deviceId: deviceId,
+      name: name,
       address: address,
       port: port,
       tag: tag,

@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Synchronize Clipboard - concept 3: Loop board (small sizes, 32 px and below)</title>
+  <defs>
+    <clipPath id="icon-shape"><rect width="1024" height="1024" rx="228"/></clipPath>
+    <clipPath id="tile-shape"><rect x="72" y="72" width="880" height="880" rx="190"/></clipPath>
+
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2e2e2e"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <!-- glass body: brighter where the light hits it (top left) -->
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.26"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.03"/>
+    </linearGradient>
+    <!-- highlight edge of the glass -->
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="0.7" stop-color="#fff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Blur regions are in user space and reach well past the canvas, and the
+         backdrop is drawn larger than the canvas, so no blur fades at an edge. -->
+    <filter id="soft" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1624" height="1624">
+      <feGaussianBlur stdDeviation="2.5"/>
+    </filter>
+    <filter id="frost" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1624" height="1624">
+      <feGaussianBlur stdDeviation="58"/>
+    </filter>
+    <filter id="tile-shadow" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="34"/>
+    </filter>
+    <filter id="mark-shadow" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <!-- fine monochrome grain, the "frosting" on the glass -->
+    <filter id="grain" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" seed="7"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.2 1.2 1.2 0 -1.3"/>
+      <feComposite operator="in" in2="SourceGraphic"/>
+    </filter>
+
+    <!-- greyscale backdrop: a pool of light from the top left, and three
+         shaded spheres that the glass tile partly covers -->
+    <radialGradient id="pool" gradientUnits="userSpaceOnUse" cx="300" cy="240" r="1050">
+      <stop offset="0" stop-color="#474747"/>
+      <stop offset="0.45" stop-color="#191919"/>
+      <stop offset="1" stop-color="#020202"/>
+    </radialGradient>
+    <radialGradient id="orb-a" cx="0.34" cy="0.3" r="0.78">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="0.5" stop-color="#c4c4c4"/>
+      <stop offset="1" stop-color="#5e5e5e"/>
+    </radialGradient>
+    <radialGradient id="orb-b" cx="0.3" cy="0.26" r="0.85">
+      <stop offset="0" stop-color="#d6d6d6"/>
+      <stop offset="0.5" stop-color="#6c6c6c"/>
+      <stop offset="1" stop-color="#1e1e1e"/>
+    </radialGradient>
+    <radialGradient id="orb-c" cx="0.34" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#f2f2f2"/>
+      <stop offset="1" stop-color="#6e6e6e"/>
+    </radialGradient>
+    <g id="backdrop">
+      <rect x="-300" y="-300" width="1624" height="1624" fill="url(#pool)"/>
+      <circle cx="206" cy="204" r="188" fill="url(#orb-a)"/>
+      <circle cx="822" cy="828" r="232" fill="url(#orb-b)"/>
+      <circle cx="852" cy="206" r="62" fill="url(#orb-c)"/>
+    </g>
+  </defs>
+
+  <g clip-path="url(#icon-shape)">
+    <!-- backdrop, lightly blurred -->
+    <use href="#backdrop" filter="url(#soft)"/>
+
+    <!-- shadow the glass tile casts on the backdrop -->
+    <rect x="72" y="94" width="880" height="880" rx="190" fill="#000" opacity="0.5" filter="url(#tile-shadow)"/>
+
+    <!-- glass tile: the same backdrop, heavily blurred, seen through the glass -->
+    <g clip-path="url(#tile-shape)">
+      <use href="#backdrop" filter="url(#frost)"/>
+      <rect x="72" y="72" width="880" height="880" fill="url(#glass)"/>
+      <!-- soft inner glow just inside the bright edge -->
+      <rect x="80" y="80" width="864" height="864" rx="182" fill="none" stroke="url(#edge)" stroke-width="18" opacity="0.45" filter="url(#mark-shadow)"/>
+    </g>
+    <rect x="74" y="74" width="876" height="876" rx="188" fill="none" stroke="url(#edge)" stroke-width="4"/>
+
+    <!-- mark: soft shadow, then the mark itself in white -->
+    <g opacity="0.4" transform="translate(0 12) translate(512 512) scale(1.3) translate(-512 -512)" filter="url(#mark-shadow)">
+      <!-- the board outline is the sync loop: two arrows chasing each other -->
+      <g fill="none" stroke="#000" stroke-width="56" stroke-linecap="round">
+        <path d="M 322 482 V 382 A 90 90 0 0 1 412 292 H 612 A 90 90 0 0 1 702 382 V 428"/>
+        <path d="M 702 582 V 682 A 90 90 0 0 1 612 772 H 412 A 90 90 0 0 1 322 682 V 636"/>
+      </g>
+      <polygon points="644,426 760,426 702,510" fill="#000"/>
+      <polygon points="380,638 264,638 322,554" fill="#000"/>
+      <!-- clip -->
+      <rect x="432" y="222" width="160" height="114" rx="38" fill="#000"/>
+    </g>
+    <g transform="translate(512 512) scale(1.3) translate(-512 -512)">
+      <!-- the board outline is the sync loop: two arrows chasing each other -->
+      <g fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round">
+        <path d="M 322 482 V 382 A 90 90 0 0 1 412 292 H 612 A 90 90 0 0 1 702 382 V 428"/>
+        <path d="M 702 582 V 682 A 90 90 0 0 1 612 772 H 412 A 90 90 0 0 1 322 682 V 636"/>
+      </g>
+      <polygon points="644,426 760,426 702,510" fill="#fff"/>
+      <polygon points="380,638 264,638 322,554" fill="#fff"/>
+      <!-- clip -->
+      <rect x="432" y="222" width="160" height="114" rx="38" fill="#fff"/>
+    </g>
+
+    <!-- hairline rim so the icon keeps its shape on dark surfaces -->
+    <rect x="1.5" y="1.5" width="1021" height="1021" rx="226.5" fill="none" stroke="#fff" stroke-opacity="0.14" stroke-width="3"/>
+  </g>
+</svg>

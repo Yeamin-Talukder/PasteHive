@@ -8,7 +8,7 @@ import 'secure_channel.dart';
 import 'sync_key.dart';
 import 'sync_ports.dart';
 
-/// Another device this one is currently connected to.
+/// Another device this one is currently connected to and syncing with.
 @immutable
 class SyncPeer {
   const SyncPeer({required this.id, required this.name});
@@ -27,6 +27,61 @@ class SyncPeer {
   String toString() => 'SyncPeer($name)';
 }
 
+/// A device running this app that was heard on the network just now.
+@immutable
+class NearbyDevice {
+  const NearbyDevice({
+    required this.id,
+    required this.name,
+    required this.inMyGroup,
+  });
+
+  final String id;
+  final String name;
+
+  /// Whether it already syncs with this device (it holds the same key).
+  final bool inMyGroup;
+
+  @override
+  String toString() => 'NearbyDevice($name)';
+}
+
+/// Another device asking to sync with this one, waiting for an answer.
+class PairRequest {
+  PairRequest._(this.id, this.name, this.code, this._theirKey, this._channel);
+
+  /// The asking device's id and name.
+  final String id;
+  final String name;
+
+  /// Six digits that the asking device shows as well. If they match, the
+  /// request really comes from that device and nobody is in between.
+  final String code;
+
+  final SyncKey? _theirKey;
+  final SecureChannel _channel;
+}
+
+/// Where this device's own request to another one stands.
+enum OutgoingState { waiting, accepted, declined, failed }
+
+@immutable
+class OutgoingRequest {
+  const OutgoingRequest({
+    required this.id,
+    required this.name,
+    required this.state,
+    this.code,
+  });
+
+  final String id;
+  final String name;
+  final OutgoingState state;
+
+  /// The verification code, once connected to the other device.
+  final String? code;
+}
+
 /// Text that was copied on another device.
 @immutable
 class RemoteClip {
@@ -36,12 +91,20 @@ class RemoteClip {
   final String fromName;
 }
 
-/// Keeps this device connected to the others that hold the same sync key,
-/// and carries copied text between them.
+/// Finds the other devices on the network, pairs with the ones the user
+/// chooses, and carries copied text between all the devices in the group.
 ///
-/// Devices find each other through [Discovery] and talk over a
-/// [SecureChannel] each. Sync runs only while it is switched on and a key is
-/// set; until then no network port is opened at all.
+/// **Pairing.** A device asks another to sync ([requestPairing]); the other
+/// one's user accepts or declines ([accept], [decline]). Both screens show
+/// the same six-digit code for that conversation.
+///
+/// **Groups.** Devices that sync share one key, which the user never sees.
+/// Accepting a request hands the asking device the key of the group the
+/// accepting device is in (or a new key if neither had one). Every device
+/// holding the key connects to every other one directly, so pairing a third
+/// device with any member makes it sync with all of them.
+///
+/// While sync is off no network port is open.
 class SyncService extends ChangeNotifier {
   SyncService({
     required this._discovery,
@@ -53,7 +116,8 @@ class SyncService extends ChangeNotifier {
     this.pingInterval = const Duration(seconds: 10),
     this.peerTimeout = const Duration(seconds: 30),
     this.fallbackConnectDelay = const Duration(seconds: 6),
-    this.foreignMemory = const Duration(seconds: 15),
+    this.nearbyMemory = const Duration(seconds: 12),
+    this.pairingTimeout = const Duration(seconds: 90),
     this.maxTextLength = 1000000,
   }) : _random = random ?? Random.secure(),
        _clock = clock ?? _stopwatchClock();
@@ -75,8 +139,11 @@ class SyncService extends ChangeNotifier {
   /// has not happened after this long, the other one tries as well.
   final Duration fallbackConnectDelay;
 
-  /// How long a nearby device with a different key is remembered.
-  final Duration foreignMemory;
+  /// How long a device stays in the nearby list after it was last heard.
+  final Duration nearbyMemory;
+
+  /// How long a request waits for the other side's answer.
+  final Duration pairingTimeout;
 
   /// Longer text is neither sent nor accepted.
   final int maxTextLength;
@@ -85,8 +152,9 @@ class SyncService extends ChangeNotifier {
   final Map<String, _Session> _sessions = {};
   final Set<String> _connecting = {};
   final Map<String, Duration> _firstHeard = {};
-  final Map<String, Duration> _foreignHeard = {};
+  final Map<String, _Heard> _nearby = {};
   final Map<String, String> _expectedTags = {};
+  final List<PairRequest> _requests = [];
 
   SyncSettings? _settings;
   SyncKey? _key;
@@ -96,21 +164,26 @@ class SyncService extends ChangeNotifier {
   Timer? _timer;
   bool _running = false;
   String? _error;
+  OutgoingRequest? _outgoing;
+  SecureChannel? _outgoingChannel;
   Future<void> _configuring = Future.value();
+
+  /// Called when another device asks to sync, so the app can bring the
+  /// question in front of the user.
+  void Function(PairRequest request)? onPairRequest;
 
   /// Whether the user has switched sync on.
   bool get enabled => _settings?.enabled ?? false;
 
+  /// Whether this device is in a group with at least one other device, now
+  /// or in the past.
   bool get hasKey => _key != null;
-
-  /// The sync key as shown to the user, or null when none is set.
-  String? get formattedKey => _key?.formatted;
 
   String get deviceName => _settings?.deviceName ?? '';
 
   String get deviceId => _settings?.deviceId ?? '';
 
-  /// Whether this device is on the network right now, looking for others.
+  /// Whether this device is on the network right now.
   bool get running => _running;
 
   /// The devices currently connected, by name.
@@ -119,9 +192,23 @@ class SyncService extends ChangeNotifier {
       SyncPeer(id: session.channel.peerId, name: session.channel.peerName),
   ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-  /// Whether a device running this app with a different key was heard
-  /// recently; usually a sign that a key was mistyped.
-  bool get differentKeyNearby => _foreignHeard.isNotEmpty;
+  /// Devices heard on the network that are not connected, by name: the ones
+  /// that can be asked to sync.
+  List<NearbyDevice> get nearby => [
+    for (final entry in _nearby.entries)
+      if (!_sessions.containsKey(entry.key))
+        NearbyDevice(
+          id: entry.key,
+          name: entry.value.announcement.name,
+          inMyGroup: entry.value.inMyGroup,
+        ),
+  ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  /// Requests from other devices that are waiting for an answer.
+  List<PairRequest> get requests => List.unmodifiable(_requests);
+
+  /// This device's own request to another one, if there is one to show.
+  OutgoingRequest? get outgoing => _outgoing;
 
   /// Why sync could not start, in words for the user, or null.
   String? get error => _error;
@@ -145,28 +232,111 @@ class SyncService extends ChangeNotifier {
     await _reconfigure();
   }
 
+  /// Switches sync on or off. On, this device can be seen by, and can see,
+  /// the other devices on the network.
   Future<void> setEnabled(bool value) =>
       _update((settings) => settings.copyWith(enabled: value));
 
-  /// Makes a new key and switches sync on. The other devices need this key
-  /// before they can join.
-  Future<void> createKey() => _setKey(SyncKey.generate(_random));
-
-  /// Joins the group of the device [input] was read from. Returns false, and
-  /// changes nothing, when [input] is not a complete key.
-  Future<bool> useKey(String input) async {
-    final key = SyncKey.tryParse(input);
-    if (key == null) return false;
-    await _setKey(key);
-    return true;
+  /// Asks the nearby device [deviceId] to sync with this one. The answer
+  /// shows in [outgoing].
+  Future<void> requestPairing(String deviceId) async {
+    final heard = _nearby[deviceId];
+    if (!_running || heard == null || _outgoingChannel != null) return;
+    final name = heard.announcement.name;
+    _setOutgoing(
+      OutgoingRequest(id: deviceId, name: name, state: OutgoingState.waiting),
+    );
+    try {
+      final connection = await _transport.connect(
+        heard.announcement.address,
+        heard.announcement.port,
+      );
+      final channel = await SecureChannel.open(
+        connection,
+        keyFor: _keyFor,
+        purpose: SecureChannel.pairPurpose,
+        deviceId: this.deviceId,
+        deviceName: deviceName,
+        initiator: true,
+        random: _random,
+      );
+      _outgoingChannel = channel;
+      _setOutgoing(
+        OutgoingRequest(
+          id: deviceId,
+          name: name,
+          state: OutgoingState.waiting,
+          code: channel.verificationCode,
+        ),
+      );
+      unawaited(channel.send({'type': 'pair-request', 'key': _key?.canonical}));
+      final answer = await channel.messages.first.timeout(pairingTimeout);
+      final offered = answer['key'];
+      final key = offered is String ? SyncKey.tryParse(offered) : null;
+      if (answer['type'] == 'pair-accept' && key != null) {
+        _setOutgoing(
+          OutgoingRequest(
+            id: deviceId,
+            name: name,
+            state: OutgoingState.accepted,
+          ),
+        );
+        await channel.close();
+        _outgoingChannel = null;
+        await _setKey(key);
+      } else {
+        _finishOutgoing(deviceId, name, OutgoingState.declined);
+      }
+    } on Object catch (error) {
+      debugPrint('Pairing with $name did not complete: $error');
+      _finishOutgoing(deviceId, name, OutgoingState.failed);
+    }
   }
 
-  /// Forgets the key and switches sync off.
-  Future<void> removeKey() {
-    _key = null;
-    return _update(
-      (settings) => settings.copyWith(enabled: false, key: () => null),
+  /// Takes back this device's own request, or clears its result.
+  void cancelOutgoing() {
+    final channel = _outgoingChannel;
+    _outgoingChannel = null;
+    if (channel != null) unawaited(channel.close());
+    _setOutgoing(null);
+  }
+
+  /// Lets the asking device in. It joins this device's group; if this
+  /// device was in none, the two form one (around the asking device's group
+  /// if it had one).
+  Future<void> accept(PairRequest request) async {
+    if (!_requests.remove(request)) return;
+    final key = _key ?? request._theirKey ?? SyncKey.generate(_random);
+    await request._channel.send({'type': 'pair-accept', 'key': key.canonical});
+    // Give the answer a moment to leave before the connection goes.
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 300),
+        request._channel.close,
+      ),
     );
+    notifyListeners();
+    if (key != _key) await _setKey(key);
+  }
+
+  /// Turns the asking device away.
+  Future<void> decline(PairRequest request) async {
+    if (!_requests.remove(request)) return;
+    await request._channel.send({'type': 'pair-decline'});
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 300),
+        request._channel.close,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Leaves the group: this device stops syncing with all the others. They
+  /// keep syncing with each other.
+  Future<void> leaveGroup() {
+    _key = null;
+    return _update((settings) => settings.copyWith(key: () => null));
   }
 
   /// Sends [text] to every connected device.
@@ -187,9 +357,9 @@ class SyncService extends ChangeNotifier {
         unawaited(session.channel.send({'type': 'ping'}));
       }
     }
-    final before = _foreignHeard.length;
-    _foreignHeard.removeWhere((_, heard) => now - heard > foreignMemory);
-    if (_foreignHeard.length != before) notifyListeners();
+    final before = _nearby.length;
+    _nearby.removeWhere((_, heard) => now - heard.at > nearbyMemory);
+    if (_nearby.length != before) notifyListeners();
   }
 
   /// Disconnects and closes the network port. The settings are kept.
@@ -201,6 +371,23 @@ class SyncService extends ChangeNotifier {
   void dispose() {
     unawaited(_remoteClips.close());
     super.dispose();
+  }
+
+  SyncKey? _keyFor(String purpose) =>
+      purpose == SecureChannel.pairPurpose ? SyncKey.pairing : _key;
+
+  void _setOutgoing(OutgoingRequest? request) {
+    _outgoing = request;
+    notifyListeners();
+  }
+
+  void _finishOutgoing(String id, String name, OutgoingState state) {
+    final channel = _outgoingChannel;
+    _outgoingChannel = null;
+    if (channel != null) unawaited(channel.close());
+    // Cancelled meanwhile: nothing to report.
+    if (_outgoing?.id != id) return;
+    _setOutgoing(OutgoingRequest(id: id, name: name, state: state));
   }
 
   Future<void> _setKey(SyncKey key) {
@@ -222,13 +409,13 @@ class SyncService extends ChangeNotifier {
   Future<void> _reconfigure() {
     return _configuring = _configuring.then((_) async {
       await _stop();
-      if (enabled && _key != null) await _start();
+      if (enabled) await _start();
       notifyListeners();
     });
   }
 
   Future<void> _start() async {
-    final key = _key!;
+    final key = _key;
     _error = null;
     try {
       final listener = await _transport.listen();
@@ -237,8 +424,10 @@ class SyncService extends ChangeNotifier {
       _announcements = _discovery.announcements.listen(_onAnnouncement);
       await _discovery.start(
         deviceId: deviceId,
+        name: deviceName,
         port: listener.port,
-        tag: await key.discoveryTag(deviceId),
+        // A device in no group yet has nothing to prove.
+        tag: key == null ? '' : await key.discoveryTag(deviceId),
       );
     } on Object catch (error) {
       debugPrint('Sync could not start: $error');
@@ -266,8 +455,12 @@ class SyncService extends ChangeNotifier {
     _sessions.clear();
     _connecting.clear();
     _firstHeard.clear();
-    _foreignHeard.clear();
+    _nearby.clear();
     _expectedTags.clear();
+    for (final request in _requests) {
+      unawaited(request._channel.close());
+    }
+    _requests.clear();
     try {
       await _discovery.stop();
       await _listener?.close();
@@ -280,19 +473,26 @@ class SyncService extends ChangeNotifier {
   Future<void> _onAnnouncement(PeerAnnouncement announcement) async {
     final key = _key;
     final id = announcement.deviceId;
-    if (!_running || key == null || id == deviceId) return;
+    if (!_running || id == deviceId) return;
 
-    final expected = _expectedTags[id] ??= await key.discoveryTag(id);
-    // Sync may have been stopped or re-keyed while the tag was computed.
-    if (!_running || key != _key) return;
+    var inMyGroup = false;
+    if (key != null && announcement.tag.isNotEmpty) {
+      final expected = _expectedTags[id] ??= await key.discoveryTag(id);
+      // Sync may have been stopped or re-keyed while the tag was computed.
+      if (!_running || key != _key) return;
+      inMyGroup = announcement.tag == expected;
+    }
 
     final now = _clock();
-    if (announcement.tag != expected) {
-      final isNew = !_foreignHeard.containsKey(id);
-      _foreignHeard[id] = now;
-      if (isNew) notifyListeners();
-      return;
+    final known = _nearby[id];
+    _nearby[id] = _Heard(announcement, now, inMyGroup: inMyGroup);
+    if (known == null ||
+        known.inMyGroup != inMyGroup ||
+        known.announcement.name != announcement.name) {
+      notifyListeners();
     }
+
+    if (!inMyGroup || key == null) return;
     if (_sessions.containsKey(id) || _connecting.contains(id)) return;
 
     // One side connects, so two devices do not end up with two connections.
@@ -306,7 +506,12 @@ class SyncService extends ChangeNotifier {
         announcement.address,
         announcement.port,
       );
-      await _open(connection, key, initiator: true);
+      final channel = await _open(connection, initiator: true);
+      if (!_running || key != _key) {
+        await channel.close();
+      } else {
+        _adopt(channel);
+      }
     } on Object catch (error) {
       debugPrint('Could not connect to $announcement: $error');
     } finally {
@@ -315,36 +520,66 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> _accept(ByteConnection connection) async {
-    final key = _key;
-    if (!_running || key == null) {
+    if (!_running) {
       await connection.close();
       return;
     }
+    final key = _key;
     try {
-      await _open(connection, key, initiator: false);
+      final channel = await _open(connection, initiator: false);
+      if (!_running || key != _key) {
+        await channel.close();
+      } else if (channel.purpose == SecureChannel.pairPurpose) {
+        unawaited(_receiveRequest(channel));
+      } else {
+        _adopt(channel);
+      }
     } on Object catch (error) {
       debugPrint('Refused an incoming connection: $error');
     }
   }
 
-  Future<void> _open(
-    ByteConnection connection,
-    SyncKey key, {
+  Future<SecureChannel> _open(
+    ByteConnection connection, {
     required bool initiator,
-  }) async {
-    final channel = await SecureChannel.open(
+  }) {
+    return SecureChannel.open(
       connection,
-      key: key,
+      keyFor: _keyFor,
       deviceId: deviceId,
       deviceName: deviceName,
       initiator: initiator,
       random: _random,
     );
-    if (!_running || key != _key) {
-      await channel.close();
-      return;
+  }
+
+  // Another device has connected to ask whether it may sync with this one.
+  Future<void> _receiveRequest(SecureChannel channel) async {
+    PairRequest? request;
+    try {
+      await for (final message in channel.messages.timeout(pairingTimeout)) {
+        if (message['type'] != 'pair-request' || request != null) continue;
+        final offered = message['key'];
+        request = PairRequest._(
+          channel.peerId,
+          channel.peerName,
+          channel.verificationCode,
+          offered is String ? SyncKey.tryParse(offered) : null,
+          channel,
+        );
+        // A second request from the same device replaces the first.
+        _requests
+          ..removeWhere((existing) => existing.id == request!.id)
+          ..add(request);
+        notifyListeners();
+        onPairRequest?.call(request);
+      }
+    } on Object catch (error) {
+      debugPrint('A pairing request ended: $error');
     }
-    _adopt(channel);
+    // The other side hung up, or nobody answered in time.
+    await channel.close();
+    if (request != null && _requests.remove(request)) notifyListeners();
   }
 
   void _adopt(SecureChannel channel) {
@@ -416,4 +651,12 @@ class _Session {
 
   final SecureChannel channel;
   Duration lastHeard;
+}
+
+class _Heard {
+  _Heard(this.announcement, this.at, {required this.inMyGroup});
+
+  final PeerAnnouncement announcement;
+  final Duration at;
+  final bool inMyGroup;
 }

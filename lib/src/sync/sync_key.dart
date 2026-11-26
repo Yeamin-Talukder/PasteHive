@@ -21,6 +21,13 @@ class SyncKey {
   /// The 20 characters, upper case, no separators.
   final String canonical;
 
+  /// Not a secret: the key two devices use for the one conversation in
+  /// which one asks to join the other. That conversation is still
+  /// encrypted against bystanders by its own key exchange, but it is not
+  /// proof of who is on the other end; the verification code shown on both
+  /// screens is.
+  static const SyncKey pairing = SyncKey._('PA1R1NGPA1R1NGPA1R1N');
+
   static SyncKey generate([Random? random]) {
     final source = random ?? Random.secure();
     return SyncKey._(

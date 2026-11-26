@@ -23,6 +23,7 @@ const _beaconVersion = 1;
 /// The datagram a device sends to say where it is listening.
 List<int> encodeBeacon({
   required String deviceId,
+  required String name,
   required int port,
   required String tag,
 }) {
@@ -31,6 +32,7 @@ List<int> encodeBeacon({
       'app': _beaconApp,
       'v': _beaconVersion,
       'id': deviceId,
+      'name': name,
       'port': port,
       'tag': tag,
     }),
@@ -51,8 +53,10 @@ PeerAnnouncement? decodeBeacon(List<int> bytes, String address) {
     final tag = decoded['tag'];
     if (id is! String || id.isEmpty || tag is! String) return null;
     if (port is! int || port < 1 || port > 65535) return null;
+    final name = decoded['name'];
     return PeerAnnouncement(
       deviceId: id,
+      name: name is String && name.trim().isNotEmpty ? name : 'Unnamed device',
       address: address,
       port: port,
       tag: tag,
@@ -84,11 +88,17 @@ class UdpDiscovery implements Discovery {
   @override
   Future<void> start({
     required String deviceId,
+    required String name,
     required int port,
     required String tag,
   }) async {
     await stop();
-    _beacon = encodeBeacon(deviceId: deviceId, port: port, tag: tag);
+    _beacon = encodeBeacon(
+      deviceId: deviceId,
+      name: name,
+      port: port,
+      tag: tag,
+    );
 
     final socket = await RawDatagramSocket.bind(
       InternetAddress.anyIPv4,

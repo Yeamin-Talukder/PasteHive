@@ -12,16 +12,21 @@ import 'byte_connection.dart';
 class PeerAnnouncement {
   const PeerAnnouncement({
     required this.deviceId,
+    required this.name,
     required this.address,
     required this.port,
     required this.tag,
   });
 
   final String deviceId;
+
+  /// What the device calls itself, for the list of devices nearby.
+  final String name;
   final String address;
   final int port;
 
-  /// Proof of holding a sync key, see `SyncKey.discoveryTag`.
+  /// Proof of holding a sync key, see `SyncKey.discoveryTag`; empty for a
+  /// device that is not in a group yet.
   final String tag;
 
   @override
@@ -37,6 +42,7 @@ abstract interface class Discovery {
   /// Starts announcing this device and listening for others.
   Future<void> start({
     required String deviceId,
+    required String name,
     required int port,
     required String tag,
   });

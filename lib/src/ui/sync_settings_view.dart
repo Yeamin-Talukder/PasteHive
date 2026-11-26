@@ -6,8 +6,8 @@ import '../sync/sync_service.dart';
 import 'panel_palette.dart';
 import 'panel_surface.dart';
 
-/// The panel's sync settings: switch sync on, create or enter the key, and
-/// see which devices are connected.
+/// The panel's sync view: switch sync on, see the devices nearby, ask one to
+/// sync, and answer the ones that ask.
 class SyncSettingsView extends StatefulWidget {
   const SyncSettingsView({
     super.key,
@@ -18,7 +18,7 @@ class SyncSettingsView extends StatefulWidget {
 
   final SyncService sync;
 
-  /// Whether the window paints a translucent material behind this widget.
+  /// Whether something translucent is behind this widget.
   final bool hasMaterial;
 
   /// Goes back to the clipboard list.
@@ -29,44 +29,7 @@ class SyncSettingsView extends StatefulWidget {
 }
 
 class _SyncSettingsViewState extends State<SyncSettingsView> {
-  static const _hiddenKey = '•••••-•••••-•••••-•••••';
-
-  final _keyField = TextEditingController();
-  bool _keyVisible = false;
-  bool _confirmingRemoval = false;
-  String? _joinError;
-
-  @override
-  void dispose() {
-    _keyField.dispose();
-    super.dispose();
-  }
-
-  Future<void> _createKey() async {
-    await widget.sync.createKey();
-    // A key that was just made is there to be typed on the other device.
-    if (mounted) setState(() => _keyVisible = true);
-  }
-
-  Future<void> _join() async {
-    final accepted = await widget.sync.useKey(_keyField.text);
-    if (!mounted) return;
-    setState(() {
-      _joinError = accepted
-          ? null
-          : 'That is not a complete key. A key has 20 letters and digits.';
-      if (accepted) _keyField.clear();
-    });
-  }
-
-  Future<void> _removeKey() async {
-    await widget.sync.removeKey();
-    if (!mounted) return;
-    setState(() {
-      _confirmingRemoval = false;
-      _keyVisible = false;
-    });
-  }
+  bool _confirmingLeave = false;
 
   @override
   Widget build(BuildContext context) {
@@ -80,31 +43,41 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
           hasMaterial: widget.hasMaterial,
           builder: (context, palette) => ListenableBuilder(
             listenable: widget.sync,
-            builder: (context, _) => Column(
-              children: [
-                _Header(palette: palette, onDone: widget.onDone),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSwitch(palette),
-                        const SizedBox(height: 22),
-                        _SectionLabel('Sync Key', palette: palette),
-                        if (widget.sync.hasKey)
-                          ..._buildKey(palette)
-                        else
-                          ..._buildNoKey(palette),
-                        const SizedBox(height: 22),
-                        _SectionLabel('Devices', palette: palette),
-                        ..._buildDevices(palette),
-                      ],
+            builder: (context, _) {
+              final sync = widget.sync;
+              return Column(
+                children: [
+                  _Header(palette: palette, onDone: widget.onDone),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildSwitch(palette),
+                          for (final request in sync.requests) ...[
+                            const SizedBox(height: 14),
+                            _buildRequest(palette, request),
+                          ],
+                          if (sync.enabled) ...[
+                            const SizedBox(height: 22),
+                            _SectionLabel('Syncing With', palette: palette),
+                            ..._buildPeers(palette),
+                            const SizedBox(height: 22),
+                            _SectionLabel('Nearby Devices', palette: palette),
+                            ..._buildNearby(palette),
+                          ],
+                          if (sync.hasKey) ...[
+                            const SizedBox(height: 22),
+                            _buildLeave(palette),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -129,27 +102,26 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
               Semantics(
                 label: 'Sync over Local Network',
                 child: CupertinoSwitch(
-                  value: sync.enabled && sync.hasKey,
+                  value: sync.enabled,
                   activeTrackColor: palette.accent,
-                  // There is nothing to switch on until a key exists.
-                  onChanged: sync.hasKey ? sync.setEnabled : null,
+                  onChanged: sync.setEnabled,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 2),
           Text(
-            sync.hasKey
-                ? 'Text you copy goes to your other devices on this network, '
-                      'encrypted. This one appears as “${sync.deviceName}”.'
-                : 'Add a sync key below to switch this on.',
+            sync.enabled
+                ? 'Other devices on this network see this one as '
+                      '“${sync.deviceName}”. What you copy is sent only to '
+                      'devices you have connected, encrypted.'
+                : 'Switch on to find your other devices on this network.',
             style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
           ),
           if (sync.error != null) ...[
             const SizedBox(height: 8),
             _Notice(
               sync.error!,
-              palette: palette,
               color: palette.danger,
               icon: CupertinoIcons.exclamationmark_triangle_fill,
             ),
@@ -159,197 +131,153 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
     );
   }
 
-  List<Widget> _buildNoKey(PanelPalette palette) {
-    return [
-      Text(
-        'Devices that share a key sync with each other. Create one here, or '
-        'enter the key shown on your other device.',
-        style: TextStyle(color: palette.secondaryLabel),
-      ),
-      const SizedBox(height: 12),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: PanelButton(
-          label: 'Create a Key',
-          palette: palette,
-          style: PanelButtonStyle.prominent,
-          onPressed: _createKey,
-        ),
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: palette.controlFill,
-                shape: const StadiumBorder(),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                child: TextField(
-                  controller: _keyField,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textCapitalization: TextCapitalization.characters,
-                  style: _keyStyle(palette, size: 13),
-                  cursorColor: palette.accent,
-                  cursorWidth: 1.5,
-                  onSubmitted: (_) => _join(),
-                  decoration: InputDecoration.collapsed(
-                    hintText: 'Key from your other device',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      height: 1.25,
-                      color: palette.secondaryLabel,
-                    ),
-                  ),
-                ),
-              ),
+  // Another device is asking to sync: the one thing here that needs an
+  // answer, so it gets the one prominent button.
+  Widget _buildRequest(PanelPalette palette, PairRequest request) {
+    return Semantics(
+      liveRegion: true,
+      child: _Card(
+        palette: palette,
+        emphasized: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '“${request.name}” wants to sync',
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-          ),
-          const SizedBox(width: 8),
-          PanelButton(label: 'Join', palette: palette, onPressed: _join),
-        ],
-      ),
-      if (_joinError != null) ...[
-        const SizedBox(height: 8),
-        _Notice(
-          _joinError!,
-          palette: palette,
-          color: palette.danger,
-          icon: CupertinoIcons.exclamationmark_circle_fill,
+            const SizedBox(height: 4),
+            Text(
+              'Accept only if this code is also showing on that device:',
+              style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
+            ),
+            const SizedBox(height: 6),
+            _Code(request.code, palette: palette),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                PanelButton(
+                  label: 'Accept',
+                  palette: palette,
+                  style: PanelButtonStyle.prominent,
+                  onPressed: () => widget.sync.accept(request),
+                ),
+                const SizedBox(width: 8),
+                PanelButton(
+                  label: 'Decline',
+                  palette: palette,
+                  onPressed: () => widget.sync.decline(request),
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
-    ];
+      ),
+    );
   }
 
-  List<Widget> _buildKey(PanelPalette palette) {
-    final key = widget.sync.formattedKey!;
+  List<Widget> _buildPeers(PanelPalette palette) {
+    final peers = widget.sync.peers;
+    if (peers.isEmpty) {
+      return [
+        Text(
+          widget.sync.hasKey
+              ? 'None of your connected devices is on this network right now.'
+              : 'No devices yet. Connect to one below.',
+          style: TextStyle(color: palette.secondaryLabel),
+        ),
+      ];
+    }
     return [
       _Card(
         palette: palette,
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: Semantics(
-                label: _keyVisible ? 'Sync key $key' : 'Sync key, hidden',
-                excludeSemantics: true,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: SelectableText(
-                    _keyVisible ? key : _hiddenKey,
-                    maxLines: 1,
-                    style: _keyStyle(palette, size: 15),
+            for (final (index, peer) in peers.indexed) ...[
+              if (index > 0) _Divider(palette: palette),
+              Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.checkmark_circle_fill,
+                    size: 14,
+                    color: palette.positive,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      peer.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  Text(
+                    'Connected',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: palette.secondaryLabel,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            PanelButton(
-              label: _keyVisible ? 'Hide' : 'Show',
-              palette: palette,
-              onPressed: () => setState(() => _keyVisible = !_keyVisible),
-            ),
+            ],
           ],
         ),
       ),
-      const SizedBox(height: 8),
-      Text(
-        'Enter this key on your other device. Anyone on your network who '
-        'has it can read what you copy, so keep it to yourself.',
-        style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
-      ),
-      const SizedBox(height: 12),
-      if (_confirmingRemoval)
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Sync stops on this device.',
-                style: TextStyle(color: palette.secondaryLabel),
-              ),
-            ),
-            PanelButton(
-              label: 'Cancel',
-              palette: palette,
-              onPressed: () => setState(() => _confirmingRemoval = false),
-            ),
-            const SizedBox(width: 8),
-            PanelButton(
-              label: 'Remove',
-              palette: palette,
-              style: PanelButtonStyle.destructive,
-              onPressed: _removeKey,
-            ),
-          ],
-        )
-      else
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PanelButton(
-            label: 'Remove Key…',
-            palette: palette,
-            style: PanelButtonStyle.destructive,
-            onPressed: () => setState(() => _confirmingRemoval = true),
-          ),
-        ),
     ];
   }
 
-  List<Widget> _buildDevices(PanelPalette palette) {
+  List<Widget> _buildNearby(PanelPalette palette) {
     final sync = widget.sync;
-    final peers = sync.peers;
-    final String? status = !sync.hasKey
-        ? 'Add a sync key to connect your devices.'
-        : !sync.enabled
-        ? 'Sync is off.'
-        : peers.isEmpty
-        ? 'Looking for your other devices on this network…'
-        : null;
+    final outgoing = sync.outgoing;
+    // Devices of this group that are merely still connecting are not
+    // something to ask again.
+    final devices = [
+      for (final device in sync.nearby)
+        if (!device.inMyGroup) device,
+    ];
     return [
-      if (status != null)
-        Text(status, style: TextStyle(color: palette.secondaryLabel)),
-      if (peers.isNotEmpty)
+      if (outgoing != null) ...[
+        _buildOutgoing(palette, outgoing),
+        const SizedBox(height: 10),
+      ],
+      if (devices.isEmpty)
+        Text(
+          'Looking for devices… Open this app on your other device, on the '
+          'same network, and switch sync on there too.',
+          style: TextStyle(color: palette.secondaryLabel),
+        )
+      else
         _Card(
           palette: palette,
           child: Column(
             children: [
-              for (final (index, peer) in peers.indexed) ...[
-                if (index > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: SizedBox(
-                      height: 1,
-                      child: ColoredBox(color: palette.separator),
-                    ),
-                  ),
+              for (final (index, device) in devices.indexed) ...[
+                if (index > 0) _Divider(palette: palette),
                 Row(
                   children: [
                     Icon(
-                      CupertinoIcons.checkmark_circle_fill,
-                      size: 14,
-                      color: palette.positive,
+                      CupertinoIcons.desktopcomputer,
+                      size: 15,
+                      color: palette.secondaryLabel,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        peer.name,
+                        device.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ),
-                    Text(
-                      'Connected',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: palette.secondaryLabel,
-                      ),
+                    const SizedBox(width: 8),
+                    PanelButton(
+                      label: 'Connect',
+                      palette: palette,
+                      // One request at a time.
+                      onPressed: outgoing?.state == OutgoingState.waiting
+                          ? null
+                          : () => sync.requestPairing(device.id),
                     ),
                   ],
                 ),
@@ -357,29 +285,102 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
             ],
           ),
         ),
-      if (sync.differentKeyNearby) ...[
-        const SizedBox(height: 10),
-        _Notice(
-          'A device nearby is using a different key. Check that the key is '
-          'the same on both.',
-          palette: palette,
-          color: palette.secondaryLabel,
-          icon: CupertinoIcons.info_circle_fill,
-        ),
-      ],
     ];
   }
 
-  static TextStyle _keyStyle(PanelPalette palette, {required double size}) {
-    return TextStyle(
-      fontSize: size,
-      height: 1.25,
-      letterSpacing: 0.5,
-      color: palette.label,
-      // Every character the same width, so the groups line up and 0 and 8
-      // are easy to tell apart.
-      fontFamily: 'Menlo',
-      fontFamilyFallback: const ['SF Mono', 'Consolas', 'Courier New'],
+  Widget _buildOutgoing(PanelPalette palette, OutgoingRequest outgoing) {
+    final (String title, String? detail) = switch (outgoing.state) {
+      OutgoingState.waiting => (
+        'Waiting for “${outgoing.name}” to accept…',
+        outgoing.code == null
+            ? null
+            : 'Accept on that device if it shows this code:',
+      ),
+      OutgoingState.accepted => ('“${outgoing.name}” accepted', null),
+      OutgoingState.declined => ('“${outgoing.name}” declined', null),
+      OutgoingState.failed => (
+        'Could not reach “${outgoing.name}”',
+        'Check that it is on, on this network, and has sync switched on.',
+      ),
+    };
+    final waiting = outgoing.state == OutgoingState.waiting;
+    return Semantics(
+      liveRegion: true,
+      child: _Card(
+        palette: palette,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                PanelButton(
+                  label: waiting ? 'Cancel' : 'OK',
+                  palette: palette,
+                  onPressed: widget.sync.cancelOutgoing,
+                ),
+              ],
+            ),
+            if (detail != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                detail,
+                style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
+              ),
+            ],
+            if (waiting && outgoing.code != null) ...[
+              const SizedBox(height: 6),
+              _Code(outgoing.code!, palette: palette),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeave(PanelPalette palette) {
+    if (!_confirmingLeave) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: PanelButton(
+          label: 'Stop Syncing with All Devices…',
+          palette: palette,
+          style: PanelButtonStyle.destructive,
+          onPressed: () => setState(() => _confirmingLeave = true),
+        ),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'This device forgets the others. Connect again to resume.',
+            style: TextStyle(color: palette.secondaryLabel),
+          ),
+        ),
+        const SizedBox(width: 8),
+        PanelButton(
+          label: 'Cancel',
+          palette: palette,
+          onPressed: () => setState(() => _confirmingLeave = false),
+        ),
+        const SizedBox(width: 8),
+        PanelButton(
+          label: 'Stop',
+          palette: palette,
+          style: PanelButtonStyle.destructive,
+          onPressed: () async {
+            await widget.sync.leaveGroup();
+            if (mounted) setState(() => _confirmingLeave = false);
+          },
+        ),
+      ],
     );
   }
 }
@@ -443,17 +444,25 @@ class _SectionLabel extends StatelessWidget {
 
 /// A rounded group of related controls.
 class _Card extends StatelessWidget {
-  const _Card({required this.palette, required this.child});
+  const _Card({
+    required this.palette,
+    required this.child,
+    this.emphasized = false,
+  });
 
   final PanelPalette palette;
   final Widget child;
+
+  /// Stands out from the other cards: something is waiting for an answer.
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: palette.rowHover,
+        color: emphasized ? palette.rowSelected : palette.rowHover,
         borderRadius: BorderRadius.circular(12),
+        border: emphasized ? Border.all(color: palette.accent) : null,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -463,18 +472,55 @@ class _Card extends StatelessWidget {
   }
 }
 
+class _Divider extends StatelessWidget {
+  const _Divider({required this.palette});
+
+  final PanelPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SizedBox(height: 1, child: ColoredBox(color: palette.separator)),
+    );
+  }
+}
+
+/// The six-digit code both devices show while pairing, spaced for reading.
+class _Code extends StatelessWidget {
+  const _Code(this.code, {required this.palette});
+
+  final String code;
+  final PanelPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final spaced = code.length == 6
+        ? '${code.substring(0, 3)} ${code.substring(3)}'
+        : code;
+    return Semantics(
+      label: 'Code ${code.split('').join(' ')}',
+      excludeSemantics: true,
+      child: Text(
+        spaced,
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 2,
+          color: palette.label,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
 /// A line of explanation with a symbol in front, so its meaning does not
 /// rest on its colour.
 class _Notice extends StatelessWidget {
-  const _Notice(
-    this.text, {
-    required this.palette,
-    required this.color,
-    required this.icon,
-  });
+  const _Notice(this.text, {required this.color, required this.icon});
 
   final String text;
-  final PanelPalette palette;
   final Color color;
   final IconData icon;
 

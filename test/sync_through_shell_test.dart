@@ -7,7 +7,7 @@ import 'package:synchronize_clipboard/src/sync/sync_service.dart';
 
 import 'fakes.dart';
 import 'sync/memory_network.dart';
-import 'sync/sync_service_test.dart' show eventually, settle;
+import 'sync/sync_service_test.dart' show eventually, pairDevices, settle;
 
 /// A whole (pretend) computer: clipboard, history, panel, tray and sync.
 class Computer {
@@ -67,12 +67,7 @@ void main() {
   });
 
   Future<void> pair() async {
-    await mac.sync.createKey();
-    await pc.sync.useKey(mac.sync.formattedKey!);
-    network.announce();
-    await eventually(
-      () => mac.sync.peers.isNotEmpty && pc.sync.peers.isNotEmpty,
-    );
+    await pairDevices(network, mac.sync, pc.sync);
   }
 
   /// How many encrypted messages have crossed the network so far.

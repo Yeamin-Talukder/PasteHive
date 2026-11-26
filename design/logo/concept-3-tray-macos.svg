@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="172 171 680 680">
+  <title>Synchronize Clipboard - tray icon, macOS (black template image)</title>
+  <g fill="none" stroke="#000" stroke-width="60" stroke-linecap="round">
+    <path d="M 322 482 V 382 A 90 90 0 0 1 412 292 H 612 A 90 90 0 0 1 702 382 V 428"/>
+    <path d="M 702 582 V 682 A 90 90 0 0 1 612 772 H 412 A 90 90 0 0 1 322 682 V 636"/>
+  </g>
+  <polygon points="642,426 762,426 702,512" fill="#000"/>
+  <polygon points="382,638 262,638 322,552" fill="#000"/>
+  <rect x="432" y="222" width="160" height="114" rx="38" fill="#000"/>
+</svg>

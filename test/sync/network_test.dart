@@ -8,25 +8,34 @@ import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
 import 'package:synchronize_clipboard/src/sync/sync_service.dart';
 
 import 'memory_network.dart';
-import 'sync_service_test.dart' show eventually;
+import 'sync_service_test.dart' show eventually, pairDevices;
 
 void main() {
   group('beacon', () {
     test('survives the trip', () {
-      final bytes = encodeBeacon(deviceId: 'abc123', port: 50123, tag: 'feed');
+      final bytes = encodeBeacon(
+        deviceId: 'abc123',
+        name: 'Office PC',
+        port: 50123,
+        tag: 'feed',
+      );
       final announcement = decodeBeacon(bytes, '192.168.1.20')!;
 
       expect(announcement.deviceId, 'abc123');
+      expect(announcement.name, 'Office PC');
       expect(announcement.port, 50123);
       expect(announcement.tag, 'feed');
       expect(announcement.address, '192.168.1.20');
     });
 
-    test('says nothing about the device beyond id, port and tag', () {
+    test('carries only the id, name, port and tag', () {
       final decoded = jsonDecode(
-        utf8.decode(encodeBeacon(deviceId: 'a', port: 1, tag: 't')),
+        utf8.decode(encodeBeacon(deviceId: 'a', name: 'n', port: 1, tag: 't')),
       ) as Map<String, Object?>;
-      expect(decoded.keys, unorderedEquals(['app', 'v', 'id', 'port', 'tag']));
+      expect(
+        decoded.keys,
+        unorderedEquals(['app', 'v', 'id', 'name', 'port', 'tag']),
+      );
     });
 
     test('ignores datagrams from anything else', () {
@@ -125,10 +134,7 @@ void main() {
 
       await mac.load();
       await pc.load();
-      await mac.createKey();
-      await pc.useKey(mac.formattedKey!);
-      network.announce();
-      await eventually(() => mac.peers.isNotEmpty && pc.peers.isNotEmpty);
+      await pairDevices(network, mac, pc);
 
       final long = 'long text ' * 20000;
       mac.sendClip(long);

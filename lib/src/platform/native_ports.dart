@@ -16,7 +16,9 @@ import 'package:nativeapi_flutter/nativeapi_flutter.dart' show ImageAsset;
 
 import '../shell/panel_controller.dart';
 import 'ports.dart';
+import 'macos.dart' as macos;
 import 'win32.dart';
+import 'win32.dart' as win32;
 
 class NativeClipboard implements ClipboardPort {
   const NativeClipboard();
@@ -292,22 +294,42 @@ class NativePanelWindow implements PanelWindowPort {
   @override
   void hide() => _window?.hide();
 
-  // Pasting into another app on macOS means sending it key events, which
-  // needs the Accessibility permission and native code; not done yet.
   @override
-  bool get canPaste => Platform.isWindows;
+  bool get canPaste => Platform.isWindows || Platform.isMacOS;
 
   @override
   Future<bool> pasteIntoPreviousWindow() async {
+    if (Platform.isMacOS) return _pasteOnMac();
     if (!Platform.isWindows) return false;
     if (!restoreForeground(_previousWindow)) return false;
     // The other window needs a moment to become active and put the
     // keyboard back in the field that had it.
     await Future<void>.delayed(const Duration(milliseconds: 90));
-    lastPasteSent = sendPasteKeys();
+    lastPasteSent = win32.sendPasteKeys();
     return lastPasteSent!;
   }
 
+  // The panel never took the other app out of the foreground, so that app
+  // still has its field selected; it only has to get the keyboard back,
+  // which happens when the panel has finished closing.
+  Future<bool> _pasteOnMac() async {
+    if (!macos.canSendKeys()) {
+      // macOS only delivers key events from apps the user has allowed.
+      // Take them to the switch once per launch; meanwhile the entry is on
+      // the clipboard and can be pasted by hand.
+      if (!_askedForAccessibility) {
+        _askedForAccessibility = true;
+        await macos.openAccessibilitySettings();
+      }
+      lastPasteSent = false;
+      return false;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    lastPasteSent = macos.sendPasteKeys();
+    return lastPasteSent!;
+  }
+
+  bool _askedForAccessibility = false;
   @override
   void Function() watchBlur(void Function() onBlur) {
     final window = _window;
