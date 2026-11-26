@@ -56,6 +56,7 @@ class AppShell {
 
   void Function()? _stopWatchingClipboard;
   StreamSubscription<RemoteClip>? _remoteClips;
+  final List<StreamSubscription<Object?>> _subscriptions = [];
   Future<void> _lastCapture = Future.value();
   int _lastOpenCount = 0;
   bool _openingSyncSettings = false;
@@ -121,6 +122,33 @@ class AppShell {
 
     trace?.call('loading sync');
     _remoteClips = sync.remoteClips.listen(_applyRemote);
+    _subscriptions
+      ..add(sync.remoteDeletes.listen(history.removeRemote))
+      ..add(sync.remoteClears.listen((_) => history.clearRemote()))
+      ..add(
+        sync.remoteHistory.listen(
+          (entry) => history.mergeRemote(
+            entry.text,
+            entry.copiedAt,
+            source: entry.fromName,
+          ),
+        ),
+      );
+    // What the user removes or brings back here happens on the other
+    // devices too. Only text travels, so only text entries are passed on.
+    history
+      ..onRemoved = (entry) {
+        if (_isText(entry)) sync.sendDelete(entry.text);
+      }
+      ..onRestored = (entry) {
+        if (_isText(entry)) sync.sendHistory([_item(entry)]);
+      }
+      ..onCleared = sync.sendClear;
+    // A device joining for the first time can be given what is already
+    // here, if the user has asked for that.
+    sync.onNewDevice = (peer) {
+      if (sync.shareHistory) shareHistory(to: peer.id);
+    };
     // Another device asking to sync is put in front of the user at once.
     sync.onPairRequest = (_) => openSyncSettings();
     await sync.load();
@@ -156,6 +184,21 @@ class AppShell {
     if (panel.canPaste) unawaited(panel.pasteIntoPreviousWindow());
   }
 
+  /// Sends this device's text history to the device [to], or to every
+  /// connected device when [to] is null.
+  void shareHistory({String? to}) {
+    sync.sendHistory([
+      for (final entry in history.entries)
+        if (_isText(entry)) _item(entry),
+    ], to: to);
+  }
+
+  static bool _isText(ClipboardEntry entry) =>
+      entry.kind != EntryKind.image && entry.kind != EntryKind.files;
+
+  static HistoryItem _item(ClipboardEntry entry) =>
+      (text: entry.text, copiedAt: entry.copiedAt);
+
   /// Opens the panel on its sync settings.
   void openSyncSettings() {
     _openingSyncSettings = true;
@@ -171,6 +214,13 @@ class AppShell {
     _stopWatchingClipboard?.call();
     _stopWatchingClipboard = null;
     await _remoteClips?.cancel();
+    for (final subscription in _subscriptions) {
+      await subscription.cancel();
+    }
+    history
+      ..onRemoved = null
+      ..onRestored = null
+      ..onCleared = null;
     await sync.shutdown();
     panel.stop();
     await history.flush();

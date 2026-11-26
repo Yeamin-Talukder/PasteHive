@@ -35,6 +35,7 @@ class PanelScene extends StatefulWidget {
     required this.onCopy,
     this.sync,
     this.page,
+    this.onSendHistory,
     this.prepareBackdrop = _blur,
     this.clock = DateTime.now,
   });
@@ -48,6 +49,9 @@ class PanelScene extends StatefulWidget {
 
   /// Which view is showing. Needed together with [sync].
   final ValueNotifier<PanelPage>? page;
+
+  /// Sends this device's history to the connected devices.
+  final VoidCallback? onSendHistory;
 
   /// Replaceable so tests need not wait for real image work.
   final BackdropPreparer prepareBackdrop;
@@ -253,6 +257,7 @@ class _PanelSceneState extends State<PanelScene>
             key: const ValueKey(PanelPage.sync),
             sync: sync,
             hasMaterial: _hasMaterial,
+            onSendHistory: widget.onSendHistory,
             onDone: () => page.value = PanelPage.history,
           ),
         },

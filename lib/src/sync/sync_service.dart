@@ -91,6 +91,23 @@ class RemoteClip {
   final String fromName;
 }
 
+/// An entry of another device's history, sent so this one has it too.
+@immutable
+class RemoteHistoryEntry {
+  const RemoteHistoryEntry({
+    required this.text,
+    required this.copiedAt,
+    required this.fromName,
+  });
+
+  final String text;
+  final DateTime copiedAt;
+  final String fromName;
+}
+
+/// One entry of this device's history, as sent to another device.
+typedef HistoryItem = ({String text, DateTime copiedAt});
+
 /// Finds the other devices on the network, pairs with the ones the user
 /// chooses, and carries copied text between all the devices in the group.
 ///
@@ -149,6 +166,12 @@ class SyncService extends ChangeNotifier {
   final int maxTextLength;
 
   final _remoteClips = StreamController<RemoteClip>.broadcast();
+  final _remoteDeletes = StreamController<String>.broadcast();
+  final _remoteClears = StreamController<void>.broadcast();
+  final _remoteHistory = StreamController<RemoteHistoryEntry>.broadcast();
+
+  /// How many history entries go into one message.
+  static const _historyBatch = 40;
   final Map<String, _Session> _sessions = {};
   final Set<String> _connecting = {};
   final Map<String, Duration> _firstHeard = {};
@@ -215,6 +238,29 @@ class SyncService extends ChangeNotifier {
 
   /// Text copied on other devices, as it arrives.
   Stream<RemoteClip> get remoteClips => _remoteClips.stream;
+
+  /// Text that was deleted from the history on another device.
+  Stream<String> get remoteDeletes => _remoteDeletes.stream;
+
+  /// Another device cleared its history.
+  Stream<void> get remoteClears => _remoteClears.stream;
+
+  /// Older entries another device is sharing.
+  Stream<RemoteHistoryEntry> get remoteHistory => _remoteHistory.stream;
+
+  /// Whether a device that joins is sent the history already here.
+  bool get shareHistory => _settings?.shareHistory ?? false;
+
+  /// Called when a device this one has never synced with connects.
+  void Function(SyncPeer peer)? onNewDevice;
+
+  Future<void> setShareHistory(bool value) async {
+    final current = _settings;
+    if (current == null || current.shareHistory == value) return;
+    _settings = current.copyWith(shareHistory: value);
+    await _store.save(_settings!);
+    notifyListeners();
+  }
 
   /// Reads the saved settings and starts syncing if it was left on.
   Future<void> load() async {
@@ -336,7 +382,9 @@ class SyncService extends ChangeNotifier {
   /// keep syncing with each other.
   Future<void> leaveGroup() {
     _key = null;
-    return _update((settings) => settings.copyWith(key: () => null));
+    return _update(
+      (settings) => settings.copyWith(key: () => null, knownDevices: const []),
+    );
   }
 
   /// Sends [text] to every connected device.
@@ -344,6 +392,43 @@ class SyncService extends ChangeNotifier {
     if (text.isEmpty || text.length > maxTextLength) return;
     for (final session in _sessions.values.toList()) {
       unawaited(session.channel.send({'type': 'clip', 'text': text}));
+    }
+  }
+
+  /// Tells every connected device that [text] was deleted here.
+  void sendDelete(String text) => _broadcast({'type': 'delete', 'text': text});
+
+  /// Tells every connected device that the history was cleared here.
+  void sendClear() => _broadcast({'type': 'clear'});
+
+  /// Sends [items] of this device's history to the device [to], or to every
+  /// connected device when [to] is null. They are added there without
+  /// touching that device's clipboard.
+  void sendHistory(Iterable<HistoryItem> items, {String? to}) {
+    final sendable = [
+      for (final item in items)
+        if (item.text.isNotEmpty && item.text.length <= maxTextLength)
+          {
+            'text': item.text,
+            'at': item.copiedAt.toUtc().millisecondsSinceEpoch,
+          },
+    ];
+    for (var i = 0; i < sendable.length; i += _historyBatch) {
+      _broadcast({
+        'type': 'history',
+        'entries': sendable.sublist(
+          i,
+          (i + _historyBatch).clamp(0, sendable.length),
+        ),
+      }, to: to);
+    }
+  }
+
+  void _broadcast(Map<String, Object?> message, {String? to}) {
+    for (final session in _sessions.values.toList()) {
+      if (to == null || session.channel.peerId == to) {
+        unawaited(session.channel.send(message));
+      }
     }
   }
 
@@ -370,6 +455,9 @@ class SyncService extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_remoteClips.close());
+    unawaited(_remoteDeletes.close());
+    unawaited(_remoteClears.close());
+    unawaited(_remoteHistory.close());
     super.dispose();
   }
 
@@ -615,6 +703,15 @@ class SyncService extends ChangeNotifier {
       },
     );
     notifyListeners();
+
+    final settings = _settings;
+    if (settings != null && !settings.knownDevices.contains(id)) {
+      _settings = settings.copyWith(
+        knownDevices: [...settings.knownDevices, id],
+      );
+      unawaited(_store.save(_settings!));
+      onNewDevice?.call(SyncPeer(id: id, name: channel.peerName));
+    }
   }
 
   void _onMessage(_Session session, Map<String, Object?> message) {
@@ -629,6 +726,33 @@ class SyncService extends ChangeNotifier {
           _remoteClips.add(
             RemoteClip(text: text, fromName: session.channel.peerName),
           );
+        }
+      case 'delete':
+        final text = message['text'];
+        if (text is String && !_remoteDeletes.isClosed) {
+          _remoteDeletes.add(text);
+        }
+      case 'clear':
+        if (!_remoteClears.isClosed) _remoteClears.add(null);
+      case 'history':
+        final entries = message['entries'];
+        if (entries is! List || _remoteHistory.isClosed) break;
+        for (final entry in entries) {
+          if (entry is! Map) continue;
+          final text = entry['text'];
+          final at = entry['at'];
+          if (text is String &&
+              text.isNotEmpty &&
+              text.length <= maxTextLength &&
+              at is int) {
+            _remoteHistory.add(
+              RemoteHistoryEntry(
+                text: text,
+                copiedAt: DateTime.fromMillisecondsSinceEpoch(at, isUtc: true),
+                fromName: session.channel.peerName,
+              ),
+            );
+          }
         }
       case 'ping':
         unawaited(session.channel.send({'type': 'pong'}));

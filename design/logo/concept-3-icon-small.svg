@@ -25,10 +25,10 @@
     <!-- Blur regions are in user space and reach well past the canvas, and the
          backdrop is drawn larger than the canvas, so no blur fades at an edge. -->
     <filter id="soft" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1624" height="1624">
-      <feGaussianBlur stdDeviation="2.5"/>
+      <feGaussianBlur stdDeviation="0.5"/>
     </filter>
     <filter id="frost" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1624" height="1624">
-      <feGaussianBlur stdDeviation="58"/>
+      <feGaussianBlur stdDeviation="22"/>
     </filter>
     <filter id="tile-shadow" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
       <feGaussianBlur stdDeviation="34"/>
@@ -43,32 +43,17 @@
       <feComposite operator="in" in2="SourceGraphic"/>
     </filter>
 
-    <!-- greyscale backdrop: a pool of light from the top left, and three
-         shaded spheres that the glass tile partly covers -->
-    <radialGradient id="pool" gradientUnits="userSpaceOnUse" cx="300" cy="240" r="1050">
-      <stop offset="0" stop-color="#474747"/>
-      <stop offset="0.45" stop-color="#191919"/>
-      <stop offset="1" stop-color="#020202"/>
-    </radialGradient>
-    <radialGradient id="orb-a" cx="0.34" cy="0.3" r="0.78">
-      <stop offset="0" stop-color="#fff"/>
-      <stop offset="0.5" stop-color="#c4c4c4"/>
-      <stop offset="1" stop-color="#5e5e5e"/>
-    </radialGradient>
-    <radialGradient id="orb-b" cx="0.3" cy="0.26" r="0.85">
-      <stop offset="0" stop-color="#d6d6d6"/>
-      <stop offset="0.5" stop-color="#6c6c6c"/>
-      <stop offset="1" stop-color="#1e1e1e"/>
-    </radialGradient>
-    <radialGradient id="orb-c" cx="0.34" cy="0.3" r="0.8">
-      <stop offset="0" stop-color="#f2f2f2"/>
-      <stop offset="1" stop-color="#6e6e6e"/>
-    </radialGradient>
+    <!-- backdrop: outlines echoing the shape of the glass tile, like a signal -->
     <g id="backdrop">
-      <rect x="-300" y="-300" width="1624" height="1624" fill="url(#pool)"/>
-      <circle cx="206" cy="204" r="188" fill="url(#orb-a)"/>
-      <circle cx="822" cy="828" r="232" fill="url(#orb-b)"/>
-      <circle cx="852" cy="206" r="62" fill="url(#orb-c)"/>
+      <rect x="-300" y="-300" width="1624" height="1624" fill="#0b0b0b"/>
+      <g fill="none" stroke="#fff">
+        <rect x="362" y="362" width="300" height="300" rx="-46" stroke-width="8" opacity="0.1"/>
+        <rect x="292" y="292" width="440" height="440" rx="24" stroke-width="8" opacity="0.14"/>
+        <rect x="222" y="222" width="580" height="580" rx="94" stroke-width="8" opacity="0.18"/>
+        <rect x="112" y="112" width="800" height="800" rx="204" stroke-width="8" opacity="0.6"/>
+        <rect x="72" y="72" width="880" height="880" rx="244" stroke-width="7" opacity="0.36"/>
+        <rect x="32" y="32" width="960" height="960" rx="284" stroke-width="6" opacity="0.2"/>
+      </g>
     </g>
   </defs>
 

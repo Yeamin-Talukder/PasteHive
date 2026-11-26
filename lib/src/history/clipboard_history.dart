@@ -125,12 +125,64 @@ class ClipboardHistory extends ChangeNotifier {
     return true;
   }
 
+  /// Called with each entry the user removes here (by [remove] or
+  /// [clearUnpinned]) and each one they bring back (by [restore]), so the
+  /// change can be passed on to other devices. Not called for changes that
+  /// came from another device.
+  void Function(ClipboardEntry entry)? onRemoved;
+  void Function(ClipboardEntry entry)? onRestored;
+
+  /// Called when the user clears the history here.
+  void Function()? onCleared;
+
   void remove(String id) {
-    final next = [
+    final removed = _entries.where((entry) => entry.id == id).firstOrNull;
+    if (removed == null) return;
+    _commit([
       for (final entry in _entries)
         if (entry.id != id) entry,
+    ]);
+    onRemoved?.call(removed);
+  }
+
+  /// Removes the text entry [text] because another device deleted it.
+  /// Returns whether there was one.
+  bool removeRemote(String text) {
+    final next = [
+      for (final entry in _entries)
+        if (entry.signature != 'text:$text') entry,
     ];
-    if (next.length != _entries.length) _commit(next);
+    if (next.length == _entries.length) return false;
+    _commit(next);
+    return true;
+  }
+
+  /// Removes everything unpinned because another device cleared its
+  /// history.
+  void clearRemote() => _clearUnpinned();
+
+  /// Adds [text] as copied at [copiedAt] on the device [source], because
+  /// that device is sharing its history. Unlike [record] it keeps the old
+  /// time, so the entry lands where it belongs in the list. Returns false
+  /// when the text is already here.
+  bool mergeRemote(String text, DateTime copiedAt, {required String source}) {
+    if (text.trim().isEmpty || text.length > maxTextLength) return false;
+    if (_entries.any((entry) => entry.signature == 'text:$text')) return false;
+    final at = copiedAt.toUtc();
+    _commit(
+      _trimmed(
+        _sorted([
+          ..._entries,
+          ClipboardEntry(
+            id: _newId(at),
+            text: text,
+            copiedAt: at,
+            source: source,
+          ),
+        ]),
+      ),
+    );
+    return true;
   }
 
   void togglePin(String id) {
@@ -154,15 +206,22 @@ class ClipboardHistory extends ChangeNotifier {
       return;
     }
     _commit(_trimmed(_sorted([..._entries, entry])));
+    onRestored?.call(entry);
   }
 
   /// Removes everything that is not pinned.
   void clearUnpinned() {
+    if (_clearUnpinned()) onCleared?.call();
+  }
+
+  bool _clearUnpinned() {
     final next = [
       for (final entry in _entries)
         if (entry.pinned) entry,
     ];
-    if (next.length != _entries.length) _commit(next);
+    if (next.length == _entries.length) return false;
+    _commit(next);
+    return true;
   }
 
   /// Entries that pass [filter] and whose text contains every word of
