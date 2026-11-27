@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The video is its own small page and render script, not part of the site.
+    "video/**",
   ]),
 ]);
 

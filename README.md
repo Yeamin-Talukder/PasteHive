@@ -50,6 +50,12 @@
 </p>
 
 <p align="center">
+  <a href="https://yeamin-talukder.github.io/PasteHive/#video"><img src="docs/video.gif" alt="PasteHive in 48 seconds: you copy on one device and need it on another; PasteHive keeps a searchable clipboard history, syncs it between your devices, and pairs them with a six-digit code" width="100%"></a>
+  <br>
+  <sub>The 48-second video, as a silent GIF. <a href="https://yeamin-talukder.github.io/PasteHive/#video">Watch it in full quality on the website</a>.</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshot-dark.png" alt="PasteHive clipboard history panel with search, filters and pinned entries" width="46%">
   &nbsp;
   <img src="docs/screenshot-sync.png" alt="PasteHive sync settings showing a connected device on the local network" width="46%">

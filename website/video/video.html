@@ -1,0 +1,534 @@
+<!doctype html>
+<!--
+  The PasteHive video, as a page.
+
+  Nothing here plays by itself. Every movement is a function of one number,
+  the time in seconds, set with window.seek(t). render.mjs steps that number
+  one frame at a time, takes a picture of each frame and hands the pictures
+  to ffmpeg. To look at it without rendering, open this file in a browser:
+  it plays in real time, and ?t=21.5 opens it stopped at that second.
+
+  Seven scenes, 48 seconds:
+     0.0  the problem: copied on the computer, needed on the phone
+     8.0  the problem: the clipboard remembers one thing
+    13.0  PasteHive
+    17.0  history: the panel at the top middle, search, paste
+    26.5  sync: copy on one device, paste on another
+    36.0  pairing: the six-digit code
+    43.0  where to get it
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PasteHive video</title>
+<script src="brand.js"></script>
+<style>
+@font-face { font-family: Geist; src: url(fonts/geist.woff2) format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Geist Mono"; src: url(fonts/geist-mono.woff2) format("woff2"); font-weight: 100 900; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #060606; overflow: hidden; }
+#stage {
+  position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0;
+  background: radial-gradient(ellipse 70% 60% at 50% 45%, #161616, #060606 75%);
+  color: #fff; font-family: Geist, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased;
+}
+.scene { position: absolute; inset: 0; }
+.abs { position: absolute; }
+.cx { left: 50%; transform: translateX(-50%); }
+.mono { font-family: "Geist Mono", Consolas, monospace; }
+.dim { color: rgba(255,255,255,.66); }
+svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.b { fill: currentColor; flex: none; }
+
+/* Words */
+.kicker { font: 500 22px "Geist Mono", monospace; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.55); white-space: nowrap; }
+.h { font-weight: 600; letter-spacing: -.04em; line-height: 1.04; white-space: nowrap; }
+.sub { font-size: 34px; line-height: 1.3; color: rgba(255,255,255,.7); letter-spacing: -.01em; }
+
+/* Devices */
+.lid { border-radius: 26px; border: 2px solid rgba(255,255,255,.22); background: #0b0b0b; padding: 14px; box-shadow: 0 50px 90px -40px #000, inset 0 1px 0 rgba(255,255,255,.14); }
+.screen { position: relative; height: 100%; overflow: hidden; border-radius: 12px; background: linear-gradient(150deg, #3a3a3a, #151515 62%, #050505); }
+.screen > .w1, .screen > .w2, .screen > .w3 { position: absolute; border-radius: 22%; }
+.w1 { left: -8%; top: -30%; width: 46%; height: 110%; rotate: 12deg; background: rgba(255,255,255,.24); }
+.w2 { right: -10%; top: 18%; width: 50%; height: 120%; rotate: -12deg; background: rgba(255,255,255,.13); }
+.w3 { left: 34%; top: -40%; width: 30%; height: 70%; rotate: 45deg; background: rgba(255,255,255,.34); }
+[data-os=mac] .w1 { left: auto; right: -6%; rotate: -12deg; } [data-os=mac] .w2 { right: auto; left: -12%; rotate: 12deg; } [data-os=mac] .w3 { rotate: -45deg; }
+.base { position: relative; height: 20px; margin: 0 -24px; border-radius: 3px 3px 16px 16px; border: 2px solid rgba(255,255,255,.16); background: linear-gradient(#2a2a2a, #0d0d0d); }
+.base::after { content: ""; position: absolute; left: 50%; top: 0; width: 110px; height: 5px; translate: -50% 0; border-radius: 0 0 9px 9px; background: rgba(0,0,0,.6); }
+.bar { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,.42); color: rgba(255,255,255,.88); z-index: 2; }
+.taskbar { bottom: 0; height: 34px; justify-content: center; }
+.taskbar span { width: 15px; height: 15px; border-radius: 4px; background: rgba(255,255,255,.26); }
+.menubar { top: 0; height: 26px; padding: 0 14px; font-size: 12.5px; }
+.phone { border-radius: 44px; border: 2px solid rgba(255,255,255,.22); background: #0b0b0b; padding: 9px; box-shadow: 0 50px 90px -36px #000, inset 0 1px 0 rgba(255,255,255,.14); }
+.phone .screen { border-radius: 36px; background: linear-gradient(160deg, #1c1c1c, #0a0a0a); display: flex; flex-direction: column; }
+.status { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px 4px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.85); }
+
+/* An app window */
+.win { position: absolute; display: flex; flex-direction: column; overflow: hidden; border-radius: 14px; border: 1.5px solid rgba(255,255,255,.18); background: rgba(27,27,27,.96); box-shadow: 0 30px 50px -20px rgba(0,0,0,.85); }
+.titlebar { display: flex; align-items: center; height: 2.3em; padding: 0 1em; border-bottom: 1px solid rgba(255,255,255,.09); font-size: .72em; color: rgba(255,255,255,.6); flex: none; }
+.dots { display: flex; gap: .4em; } .dots i { width: .75em; height: .75em; border-radius: 50%; background: rgba(255,255,255,.3); }
+.body { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: .78em; padding: 1.1em 1.4em; }
+.skel { height: .42em; border-radius: 9px; background: rgba(255,255,255,.16); } .skel.s { background: rgba(255,255,255,.3); }
+.line { position: relative; width: fit-content; font-weight: 500; white-space: nowrap; }
+.sel { position: absolute; inset: -.12em -.28em; border-radius: .22em; background: rgba(255,255,255,.3); transform-origin: left; }
+.line em { position: relative; font-style: normal; }
+.field { display: flex; align-items: center; gap: .5em; height: 2.7em; padding: 0 .85em; border-radius: .7em; border: 1.5px solid rgba(255,255,255,.16); background: rgba(0,0,0,.28); white-space: nowrap; }
+.caret { width: 2px; height: 1.25em; border-radius: 2px; background: #fff; flex: none; }
+.ph { color: rgba(255,255,255,.45); font-size: .88em; }
+.copied { position: absolute; display: flex; align-items: center; gap: .45em; padding: .3em .7em .3em .3em; border-radius: 99px; border: 1.5px solid rgba(255,255,255,.22); background: rgba(255,255,255,.15); font-size: .74em; font-weight: 500; white-space: nowrap; }
+.copied b { padding: .1em .45em; border-radius: .4em; background: #fff; color: #000; font: 600 1em "Geist Mono", monospace; }
+
+/* The clipboard panel and its rows. Sized in em, so one rule draws it at any size. */
+.panel { position: absolute; display: flex; flex-direction: column; gap: .75em; padding: .9em; border-radius: 1.5em; border: 1.5px solid rgba(255,255,255,.17); background: rgba(20,20,26,.56); backdrop-filter: blur(22px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.5), 0 30px 60px -18px rgba(0,0,0,.95); z-index: 4; }
+.search { display: flex; align-items: center; gap: .65em; height: 3em; padding: 0 1em; border-radius: 99px; background: rgba(255,255,255,.11); color: rgba(255,255,255,.55); white-space: nowrap; }
+.search .q { color: #fff; }
+.chips { display: flex; gap: .35em; font-size: .86em; white-space: nowrap; overflow: hidden; }
+.chips span { padding: .32em .8em; border-radius: 99px; color: rgba(255,255,255,.6); }
+.chips span:first-child { background: rgba(255,255,255,.22); color: #fff; font-weight: 600; }
+.rows { position: relative; }
+.row { display: flex; align-items: center; gap: .9em; height: 4.2em; padding: 0 .6em; border-radius: .95em; }
+.row.lit { background: rgba(255,255,255,.16); }
+.tile { display: flex; align-items: center; justify-content: center; width: 2.9em; height: 2.9em; border-radius: .8em; overflow: hidden; background: rgba(255,255,255,.11); color: rgba(255,255,255,.88); flex: none; }
+.tile svg.i { width: 1.5em; height: 1.5em; } .tile > svg:not(.i) { width: 100%; height: 100%; }
+.rt { min-width: 0; line-height: 1.25; } .rt b { display: block; font-size: 1.14em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt span { display: block; font-size: .84em; color: rgba(255,255,255,.6); white-space: nowrap; }
+
+.pointer { position: absolute; left: 0; top: 0; z-index: 6; }
+.token { position: absolute; left: 0; top: 0; z-index: 9; }
+.token > div { display: flex; align-items: center; gap: 10px; translate: -50% -50%; padding: 6px 20px 6px 6px; border-radius: 99px; border: 1.5px solid rgba(255,255,255,.2); background: rgba(40,40,46,.72); backdrop-filter: blur(14px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.3), 0 20px 40px -16px #000; font-size: 20px; font-weight: 500; white-space: nowrap; }
+.token .tile { font-size: 13px; }
+.echo { position: absolute; inset: -2px; border: 2px solid #fff; pointer-events: none; }
+.label { position: absolute; display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 500; color: rgba(255,255,255,.88); translate: -50% 0; white-space: nowrap; }
+.label span { font: 400 17px "Geist Mono", monospace; color: rgba(255,255,255,.55); }
+
+/* Scene 1 */
+.work { display: flex; gap: 18px; justify-content: center; left: 0; right: 0; top: 250px; }
+.work > div { position: relative; display: flex; align-items: center; gap: 12px; padding: 13px 24px; border-radius: 99px; border: 1.5px solid rgba(255,255,255,.2); background: rgba(255,255,255,.07); font-size: 25px; white-space: nowrap; }
+.work > div > u { position: absolute; left: 14px; right: 14px; top: 50%; height: 3px; border-radius: 3px; background: #fff; transform-origin: left; }
+.bubble { height: 46px; border-radius: 22px; background: rgba(255,255,255,.1); } .bubble.me { align-self: flex-end; background: rgba(255,255,255,.22); }
+.pop { position: absolute; padding: 12px 22px; border-radius: 14px; background: #2c2c30; border: 1.5px solid rgba(255,255,255,.2); font-size: 19px; font-weight: 500; box-shadow: 0 16px 30px -10px #000; white-space: nowrap; }
+
+/* Scene 2 */
+.slot { border-radius: 34px; border: 2px dashed rgba(255,255,255,.3); background: rgba(255,255,255,.04); }
+.big { position: absolute; left: 26px; right: 26px; top: 26px; height: 132px; font-size: 31px; background: rgba(40,40,46,.9); border: 1.5px solid rgba(255,255,255,.2); border-radius: 24px; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.3), 0 26px 40px -18px #000; padding: 0 22px; }
+
+/* Scene 3 and 7 */
+.ring { position: absolute; left: 50%; border: 2px solid #fff; translate: -50% -50%; }
+.logo { display: flex; align-items: center; justify-content: center; border-radius: 28%; border: 2px solid rgba(255,255,255,.3); background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.1) 50%, rgba(255,255,255,.04)); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 40px 70px -24px #000; }
+.pill { display: inline-flex; align-items: center; gap: 12px; padding: 14px 28px; border-radius: 99px; border: 1.5px solid rgba(255,255,255,.2); background: rgba(255,255,255,.07); font-size: 26px; font-weight: 500; white-space: nowrap; }
+
+/* Scene 6 */
+.pane { position: absolute; display: flex; flex-direction: column; gap: 18px; padding: 26px; border-radius: 30px; border: 1.5px solid rgba(255,255,255,.16); background: rgba(20,20,26,.7); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.35), 0 40px 70px -30px #000; font-size: 23px; }
+.pane header { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 500; }
+.toggle { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-radius: 18px; background: rgba(255,255,255,.08); white-space: nowrap; }
+.sw { position: relative; width: 62px; height: 36px; border-radius: 99px; border: 2px solid rgba(255,255,255,.3); background-color: rgba(255,255,255,.1); flex: none; }
+.sw i { position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%; background-color: rgba(255,255,255,.75); }
+.states { position: relative; flex: 1; }
+.states > div { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.states p { color: rgba(255,255,255,.68); line-height: 1.35; }
+.states small { font-size: 18px; font-weight: 600; color: rgba(255,255,255,.72); }
+.item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 14px 14px 20px; border-radius: 16px; background: rgba(255,255,255,.08); white-space: nowrap; }
+.btn { padding: 9px 22px; border-radius: 99px; background: #fff; color: #000; font-size: 20px; font-weight: 600; }
+.code { display: flex; gap: 6px; font: 600 30px "Geist Mono", monospace; }
+.code span { display: flex; align-items: center; justify-content: center; width: 44px; height: 58px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.22); background: rgba(255,255,255,.1); }
+.code span:nth-child(4) { margin-left: 14px; }
+.tick { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff; color: #000; flex: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/* ------------------------------------------------------------------ parts */
+
+const PATHS = {
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  text: '<path d="M21 6H3M15 12H3M17 18H3"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  keyboard: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  wifi: '<path d="M12 20h.01M2 8.82a15 15 0 0 1 20 0M5 12.86a10 10 0 0 1 14 0M8.5 16.43a5 5 0 0 1 7 0"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  cloudoff: '<path d="m2 2 20 20M5.78 5.78A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.31-.19M21.53 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 10 5.07"/>',
+  userx: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
+  down: '<path d="M12 17V3M6 11l6 6 6-6M19 21H5"/>',
+};
+const ico = (name, size = 24) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24">${PATHS[name]}</svg>`;
+const brand = (name, size = 24) => name === "windows"
+  ? `<svg class="b" width="${size}" height="${size}" viewBox="0 0 24 24"><path d="M2 2h9.5v9.5H2zM12.5 2H22v9.5h-9.5zM2 12.5h9.5V22H2zM12.5 12.5H22V22h-9.5z"/></svg>`
+  : `<svg class="b" width="${size}" height="${size}" viewBox="0 0 24 24"><path d="${BRAND[name]}"/></svg>`;
+const mark = (size) => `<svg width="${size}" height="${size}" viewBox="192 192 640 640"><g fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round"><path d="M322 482V382a90 90 0 0 1 90-90h200a90 90 0 0 1 90 90v46"/><path d="M702 582v100a90 90 0 0 1-90 90H412a90 90 0 0 1-90-90v-46"/></g><path d="M644 426h116l-58 84zM380 638H264l58-84z" fill="#fff"/><rect x="432" y="222" width="160" height="114" rx="38" fill="#fff"/><g fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round"><path d="M446 492h132M446 572h86"/></g></svg>`;
+
+let unique = 0;
+/* A stand-in photograph. The only colour in the film is copied content. */
+const picture = () => { const id = "sky" + unique++; return `<svg viewBox="0 0 64 40" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b5bdb"/><stop offset=".55" stop-color="#f783ac"/><stop offset="1" stop-color="#ffd8a8"/></linearGradient></defs><rect width="64" height="40" fill="url(#${id})"/><circle cx="44" cy="17" r="6" fill="#fff3bf"/><path d="M0 40V29l14-11 13 13 10-8 27 14v3z" fill="#1c2541"/><path d="M0 40v-6l20-7 20 9 24-5v9z" fill="#0b132b"/></svg>`; };
+const tile = (kind) => kind === "image" ? `<div class="tile">${picture()}</div>`
+  : kind === "color" ? `<div class="tile" style="background:#FF6B9D;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.3)"></div>`
+  : `<div class="tile">${ico(kind === "email" ? "mail" : kind)}</div>`;
+
+const ENTRY = {
+  text: ["text", "Meeting moved to 3 pm, room 4B", "30 characters"],
+  color: ["color", "#FF6B9D", "Color"],
+  link: ["link", "https://flutter.dev/docs", "flutter.dev"],
+  image: ["image", "Image", "1920 × 1080"],
+  email: ["email", "sam@example.com", "Email"],
+};
+const row = (key, meta, extra = "") => { const [kind, title, plain] = ENTRY[key]; return `<div class="row ${extra}">${tile(kind)}<div class="rt"><b>${title}</b><span>${meta ?? plain}</span></div></div>`; };
+const searchBar = (id) => `<div class="search">${ico("search", 20)}<span${id ? ` id="${id}"` : ""}>Search Clipboard</span></div>`;
+const chips = (...names) => `<div class="chips">${names.map((n) => `<span>${n}</span>`).join("")}</div>`;
+const pointer = (id) => `<div class="pointer" id="${id}"><svg width="30" height="38" viewBox="0 0 14 18"><path d="M1.5 1.5v12.7l3.4-3 2.4 5.2 2.3-1.1-2.4-5.1h4.7z" fill="#fff" stroke="#000" stroke-width="1.1" stroke-linejoin="round"/></svg></div>`;
+
+function laptop({ id, x, y, w, h, os, inner }) {
+  const bar = os === "mac"
+    ? `<div class="bar menubar">${brand("apple", 14)}<b>Photos</b><span>File</span><span>Edit</span><span style="margin-left:auto;display:flex;gap:10px">${mark(16)}${ico("wifi", 15)}</span></div>`
+    : `<div class="bar taskbar">${brand("windows", 16)}<span></span><span></span><span></span><div style="position:absolute;right:16px;display:flex;gap:10px">${mark(16)}${ico("wifi", 15)}</div></div>`;
+  return `<div class="abs" id="${id}" style="left:${x}px;top:${y}px;width:${w}px"><div class="lid" style="height:${h}px"><div class="screen" data-os="${os}"><i class="w1"></i><i class="w2"></i><i class="w3"></i>${bar}${inner}</div></div><div class="base"></div></div>`;
+}
+const phone = ({ id, x, y, w, h, inner }) => `<div class="abs phone" id="${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"><div class="screen"><div class="status"><span>10:24</span><span style="display:flex;gap:6px">${ico("wifi", 14)}</span></div>${inner}</div></div>`;
+const note = (id, size) => `<div class="titlebar"><span>Notes</span></div><div class="body"><i class="skel s" style="width:46%"></i><i class="skel" style="width:88%"></i><span class="line"><i class="sel" id="${id}"></i><em>Meeting moved to 3 pm, room 4B</em></span><i class="skel" style="width:70%"></i>`;
+
+/* ------------------------------------------------------------------ scenes */
+
+const stage = document.getElementById("stage");
+stage.innerHTML = `
+<!-- 1. Copied here, needed there -->
+<div class="scene" id="s1">
+  <div class="abs cx kicker" style="top:84px">The problem</div>
+  <div class="abs cx h" id="c1a" style="top:132px;font-size:68px">You copy something on your computer.</div>
+  <div class="abs cx h" id="c1b" style="top:132px;font-size:68px">You need it on your phone.</div>
+  <div class="abs cx h" id="c1c" style="top:132px;font-size:68px">So you send it to yourself. Again.</div>
+  <div class="abs work">
+    <div id="w1">${ico("mail", 26)}Email it to yourself<u></u></div>
+    <div id="w2">${ico("message", 26)}Message it to yourself<u></u></div>
+    <div id="w3">${ico("keyboard", 26)}Type it out again<u></u></div>
+  </div>
+  ${laptop({ id: "l1", x: 170, y: 356, w: 840, h: 520, os: "win", inner: `
+    <div class="win" style="left:70px;top:56px;width:650px;height:340px;font-size:29px">${note("sel1")}
+      <div class="copied" id="chip1" style="right:22px;top:20px"><b>Ctrl+C</b>Copied</div></div></div>
+    ${pointer("p1")}` })}
+  ${phone({ id: "ph1", x: 1330, y: 320, w: 330, h: 670, inner: `
+    <div style="padding:8px 22px 14px;font-size:22px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.1)">Sam</div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:14px;padding:22px 18px">
+      <i class="bubble" style="width:70%"></i><i class="bubble me" style="width:54%"></i><i class="bubble" style="width:62%"></i>
+    </div>
+    <div style="position:relative;padding:14px 16px 26px">
+      <div class="field" style="font-size:19px;border-radius:99px"><i class="caret" id="caret1"></i><span class="ph">Message</span></div>
+      <div class="pop" id="paste1" style="left:26px;bottom:92px">Paste</div>
+      <div class="pop" id="empty1" style="left:26px;bottom:92px">Nothing to paste</div>
+      <div class="abs" id="tap1" style="left:70px;bottom:34px;width:44px;height:44px;border-radius:50%;border:2.5px solid #fff"></div>
+    </div>` })}
+</div>
+
+<!-- 2. One thing at a time -->
+<div class="scene" id="s2">
+  <div class="abs cx kicker" style="top:84px">The problem</div>
+  <div class="abs cx h" style="top:132px;font-size:68px">And your clipboard remembers only one thing.</div>
+  <div class="abs cx kicker" style="top:398px;font-size:20px">Clipboard</div>
+  <div class="abs slot" style="left:440px;top:444px;width:1040px;height:188px">
+    <div class="row big" id="it1">${tile("link")}<div class="rt"><b>https://flutter.dev/docs</b><span>Copied a minute ago</span></div></div>
+    <div class="row big" id="it2">${tile("image")}<div class="rt"><b>A screenshot</b><span>Copied just now</span></div></div>
+    <div class="row big" id="it3">${tile("text")}<div class="rt"><b>Meeting moved to 3 pm, room 4B</b><span>Copied just now</span></div></div>
+  </div>
+  <div class="abs cx sub" id="c2" style="top:760px;font-size:38px;white-space:nowrap">Copy again, and the last thing is gone.</div>
+</div>
+
+<!-- 3. PasteHive -->
+<div class="scene" id="s3">
+  ${[320, 500, 680, 860, 1040].map((s, n) => `<div class="ring r3" style="top:420px;width:${s}px;height:${s}px;border-radius:${s * 0.24}px"></div>`).join("")}
+  <div class="abs logo" id="logo3" style="left:860px;top:320px;width:200px;height:200px">${mark(136)}</div>
+  <div class="abs cx h" id="name3" style="top:566px;font-size:124px">PasteHive</div>
+  <div class="abs cx h" id="tag3" style="top:728px;font-size:50px;font-weight:500;color:rgba(255,255,255,.9)">Copy here. Paste there.</div>
+  <div class="abs cx sub" id="line3" style="top:812px;font-size:29px;white-space:nowrap">Clipboard history and sync for Windows, macOS and Android</div>
+</div>
+
+<!-- 4. History -->
+<div class="scene" id="s4">
+  <div class="abs kicker" style="left:110px;top:318px">01 &nbsp;History</div>
+  <div class="abs h" style="left:110px;top:366px;font-size:76px">Everything<br>you copy, kept.</div>
+  <div class="abs sub" id="c4a" style="left:110px;top:566px;width:540px">Push the pointer to the top middle of the screen.</div>
+  <div class="abs sub" id="c4b" style="left:110px;top:566px;width:540px">Search as you type.</div>
+  <div class="abs sub" id="c4c" style="left:110px;top:566px;width:540px">Pick an entry. It is pasted where you were typing.</div>
+  ${laptop({ id: "l4", x: 760, y: 190, w: 1050, h: 670, os: "win", inner: `
+    <div class="win" style="left:70px;top:110px;width:882px;height:470px;font-size:26px">
+      <div class="titlebar"><span>Notes</span></div>
+      <div class="body" style="justify-content:flex-end;gap:.9em">
+        <i class="skel s" style="width:40%"></i><i class="skel" style="width:86%"></i><i class="skel" style="width:74%"></i><i class="skel" style="width:80%"></i>
+        <div class="field"><span id="pasted4" style="text-decoration:underline;text-underline-offset:5px">https://flutter.dev/docs</span><i class="caret" id="caret4"></i><span class="ph" id="ph4">Paste here</span></div>
+      </div>
+    </div>
+    <div class="abs" style="left:50%;top:0;width:160px;height:5px;translate:-50% 0;border-radius:0 0 9px 9px;background:#fff;z-index:3" id="edge4"></div>
+    <div class="abs" id="pw4" style="left:251px;top:16px;width:520px;z-index:4">
+      <div class="panel" id="panel4" style="position:relative;font-size:17.5px">
+        ${searchBar("q4")}${chips("All", "Pinned", "Text", "Links", "Images", "Files", "Emails")}
+        <div class="rows" style="height:21em">
+          <div class="abs" id="all4" style="inset:0">${row("text", "now · 30 characters", "lit")}${row("color", "2 min ago · Color")}${row("link", "5 min ago · flutter.dev")}${row("image", "8 min ago · 1920 × 1080")}${row("email", "12 min ago · Email")}</div>
+          <div class="abs" id="hit4" style="inset:0"><div id="hitrow4">${row("link", "5 min ago · flutter.dev", "lit")}</div><div style="padding:1em .7em;font-size:.86em;color:rgba(255,255,255,.5)">1 of 12 entries</div></div>
+        </div>
+      </div>
+    </div>
+    ${pointer("p4")}` })}
+</div>
+
+<!-- 5. Sync -->
+<div class="scene" id="s5">
+  <div class="abs cx kicker" style="top:76px">02 &nbsp;Sync</div>
+  <div class="abs cx h" style="top:122px;font-size:68px">Copy on one device. Paste on another.</div>
+  ${laptop({ id: "lw5", x: 84, y: 318, w: 720, h: 450, os: "win", inner: `
+    <div class="win" style="left:26px;top:76px;width:390px;height:280px;font-size:19.5px">${note("sel5")}
+      <div class="copied" id="chipw5" style="right:14px;top:12px"><b>Ctrl+C</b>Copied</div></div></div>
+    <div class="abs" style="left:181px;top:12px;width:330px"><div class="panel" id="panelw5" style="position:relative;font-size:12px">${searchBar()}<div class="rows">${row("image", "now · from Sam’s MacBook", "lit")}${row("text", "3 min ago · 30 characters")}${row("color", "9 min ago · Color")}</div></div></div>` })}
+  ${phone({ id: "ph5", x: 835, y: 296, w: 250, h: 520, inner: `
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 16px 10px;font-size:17px;font-weight:600">${mark(19)}PasteHive</div>
+    <div style="padding:0 12px;font-size:11px">${searchBar()}</div>
+    <div class="rows" style="flex:1;margin:10px 8px 0;font-size:11.5px;overflow:hidden">
+      <div class="abs" id="pn2" style="left:0;right:0;top:0">${row("image", "from Sam’s MacBook", "lit")}</div>
+      <div class="abs" id="pn1" style="left:0;right:0;top:0">${row("text", "from OFFICE-PC", "lit")}</div>
+      <div class="abs" id="pold" style="left:0;right:0;top:0">${row("color", "Color")}${row("link", "flutter.dev")}${row("email", "Email")}</div>
+    </div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:6px;padding:9px;border-top:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.5);font-size:11.5px;color:rgba(255,255,255,.7)">${ico("lock", 12)}Syncing with 2 devices</div>
+    <div class="echo" id="eph5" style="border-radius:44px"></div>` })}
+  ${laptop({ id: "lm5", x: 1116, y: 318, w: 720, h: 450, os: "mac", inner: `
+    <div class="win" style="left:276px;top:76px;width:390px;height:280px;font-size:19.5px">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div></div>
+      <div class="body" style="flex-direction:row;align-items:center;gap:1em">
+        <div style="position:relative;width:190px;height:119px;flex:none"><div style="width:100%;height:100%;border-radius:10px;overflow:hidden">${picture()}</div><div class="abs" id="ring5" style="inset:-6px;border:3px solid #fff;border-radius:15px"></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:.7em"><i class="skel s" style="width:70%"></i><i class="skel"></i><i class="skel" style="width:55%"></i></div>
+        <div class="copied" id="chipm5" style="right:14px;top:12px"><b>⌘C</b>Copied</div>
+      </div>
+    </div>
+    <div class="abs" style="left:181px;top:36px;width:330px"><div class="panel" id="panelm5" style="position:relative;font-size:12px">${searchBar()}<div class="rows">${row("text", "now · from OFFICE-PC", "lit")}${row("color", "6 min ago · Color")}${row("link", "9 min ago · flutter.dev")}</div></div></div>` })}
+  <div class="echo" id="em5" style="left:1114px;top:316px;right:auto;bottom:auto;width:724px;height:454px;border-radius:28px"></div>
+  <div class="echo" id="ew5" style="left:82px;top:316px;right:auto;bottom:auto;width:724px;height:454px;border-radius:28px"></div>
+  <div class="label" style="left:444px;top:806px">${brand("windows", 20)}Windows <span>OFFICE-PC</span></div>
+  <div class="label" style="left:960px;top:836px">${brand("android", 23)}Android</div>
+  <div class="label" style="left:1476px;top:806px">${brand("apple", 20)}macOS <span>Sam’s MacBook</span></div>
+  <div class="token" id="t5a"><div>${tile("text")}Meeting moved to 3 pm…</div></div>
+  <div class="token" id="t5b"><div>${tile("text")}Meeting moved to 3 pm…</div></div>
+  <div class="token" id="t5c"><div>${tile("image")}Image</div></div>
+  <div class="token" id="t5d"><div>${tile("image")}Image</div></div>
+  <div class="abs cx sub" id="c5" style="top:916px;white-space:nowrap">Straight between your devices on the same network. Encrypted, with no cloud.</div>
+</div>
+
+<!-- 6. Pairing -->
+<div class="scene" id="s6">
+  <div class="abs cx kicker" style="top:76px">03 &nbsp;Pairing</div>
+  <div class="abs cx h" style="top:122px;font-size:68px">Pair once, with a six-digit code.</div>
+  <div class="abs cx sub" style="top:218px;white-space:nowrap">No key to type. No account to create.</div>
+  ${[["pc", 320, "windows", "OFFICE-PC"], ["mac", 1010, "apple", "Sam’s MacBook"]].map(([k, x, b, name]) => `
+  <div class="pane" style="left:${x}px;top:330px;width:590px;height:420px">
+    <header>${brand(b, 24)}${name}</header>
+    <div class="toggle">Sync over Local Network<div class="sw" id="sw${k}"><i></i></div></div>
+    <div class="states">
+      <div class="${k}a"><p>Switch on to find your other devices on this network.</p></div>
+      ${k === "pc"
+        ? `<div class="pcb"><small>Nearby Devices</small><div class="item">Sam’s MacBook<span class="btn" id="connect6">Connect</span></div></div>
+           <div class="pcc"><p>Waiting for “Sam’s MacBook” to accept…</p><div class="code">${[..."482913"].map((d) => `<span class="dg">${d}</span>`).join("")}</div></div>
+           <div class="pcd"><small>Syncing With</small><div class="item"><span style="display:flex;align-items:center;gap:14px"><i class="tick">${ico("check", 19)}</i>Sam’s MacBook</span><span class="dim" style="font-size:19px">Connected</span></div></div>`
+        : `<div class="macb"><p>Looking for devices…</p></div>
+           <div class="macc"><p>Accept only if this code is also showing on that device:</p><div style="display:flex;align-items:center;justify-content:space-between"><div class="code">${[..."482913"].map((d) => `<span class="dg">${d}</span>`).join("")}</div><span class="btn" id="accept6">Accept</span></div></div>
+           <div class="macd"><small>Syncing With</small><div class="item"><span style="display:flex;align-items:center;gap:14px"><i class="tick">${ico("check", 19)}</i>OFFICE-PC</span><span class="dim" style="font-size:19px">Connected</span></div></div>`}
+    </div>
+  </div>`).join("")}
+  <div class="abs" id="wire6" style="left:910px;top:538px;width:100px;height:3px;background:#fff;transform-origin:left"></div>
+  <div class="abs logo" id="lock6" style="left:930px;top:510px;width:60px;height:60px;border-radius:50%;background:#fff;color:#000">${ico("lock", 28)}</div>
+  <div class="abs" style="left:0;right:0;top:822px;display:flex;justify-content:center;gap:16px">
+    <div class="pill bd">${ico("wifi", 26)}Same network</div><div class="pill bd">${ico("lock", 26)}Encrypted</div><div class="pill bd">${ico("cloudoff", 26)}No cloud</div><div class="pill bd">${ico("userx", 26)}No account</div>
+  </div>
+</div>
+
+<!-- 7. Where to get it -->
+<div class="scene" id="s7">
+  ${[300, 470, 640, 810, 980].map((s) => `<div class="ring r7" style="top:330px;width:${s}px;height:${s}px;border-radius:${s * 0.24}px"></div>`).join("")}
+  <div class="abs logo" id="logo7" style="left:870px;top:240px;width:180px;height:180px">${mark(122)}</div>
+  <div class="abs cx h" id="name7" style="top:462px;font-size:112px">PasteHive</div>
+  <div class="abs cx sub" id="free7" style="top:606px;font-size:40px;color:#fff;white-space:nowrap">Free and open source</div>
+  <div class="abs" id="plat7" style="left:0;right:0;top:700px;display:flex;justify-content:center;gap:16px">
+    <div class="pill">${brand("windows", 24)}Windows</div><div class="pill">${brand("apple", 24)}macOS</div><div class="pill">${brand("android", 27)}Android</div>
+  </div>
+  <div class="abs cx mono" id="url7" style="top:836px;font-size:30px;color:rgba(255,255,255,.8);white-space:nowrap">yeamin-talukder.github.io/PasteHive</div>
+</div>`;
+
+/* ---------------------------------------------------------------- timeline */
+
+const DURATION = 48;
+const OUT = "cubic-bezier(.22,1,.36,1)";
+const SPRING = "cubic-bezier(.3,1.4,.5,1)";
+const IN = "cubic-bezier(.4,0,.9,.4)";
+const animations = [];
+const hooks = [];
+
+/**
+ * One track: the values an element has at given seconds. Each key is
+ * [time, properties, easing used to arrive there]. Before the first key the
+ * element holds the first values; after the last, the last.
+ */
+function T(target, keys) {
+  const frames = [];
+  if (keys[0][0] > 0) frames.push({ ...keys[0][1], offset: 0 });
+  keys.forEach(([time, props]) => frames.push({ ...props, offset: time / DURATION }));
+  const last = keys[keys.length - 1];
+  if (last[0] < DURATION) frames.push({ ...last[1], offset: 1 });
+  // WAAPI puts the easing on the frame a move starts from.
+  const lead = keys[0][0] > 0 ? 1 : 0;
+  keys.forEach((key, index) => { if (index > 0) frames[lead + index - 1].easing = key[2] || OUT; });
+  const elements = typeof target === "string" ? [...document.querySelectorAll(target)] : [target];
+  if (!elements.length) throw new Error("Nothing matches " + target);
+  for (const element of elements) {
+    const animation = element.animate(frames, { duration: DURATION * 1000, fill: "both" });
+    animation.pause();
+    animations.push(animation);
+  }
+}
+const $ = (selector) => document.querySelector(selector);
+const show = (target, from, to, fade = 0.4) => T(target, to == null
+  ? [[from, { opacity: 0 }], [from + fade, { opacity: 1 }]]
+  : [[from, { opacity: 0 }], [from + fade, { opacity: 1 }], [to, { opacity: 1 }], [to + fade, { opacity: 0 }]]);
+const rise = (target, at, distance = 40, time = 0.7) => T(target, [[at, { translate: `0 ${distance}px` }], [at + time, { translate: "0 0" }]]);
+const pop = (target, at) => T(target, [[at, { scale: 0.6 }], [at + 0.45, { scale: 1 }, SPRING]]);
+const press = (target, at) => T(target, [[at, { scale: 1 }], [at + 0.12, { scale: 0.9 }], [at + 0.3, { scale: 1 }]]);
+const move = (target, points) => T(target, points.map(([time, x, y]) => [time, { translate: `${x}px ${y}px` }, "cubic-bezier(.45,0,.2,1)"]));
+const blink = (target) => hooks.push((t) => { $(target).style.visibility = t % 1.1 < 0.6 ? "visible" : "hidden"; });
+const scene = (id, from, to) => show(id, from, to - 0.4, 0.4);
+/** The panel dropping from the top edge, on the app's own spring, and leaving. */
+const drop = (target, open, close) => T(target, [
+  [open, { translate: "0 -115%", opacity: 0.4 }], [open + 0.6, { translate: "0 0", opacity: 1 }, SPRING],
+  [close, { translate: "0 0", opacity: 1 }], [close + 0.2, { translate: "0 -18%", opacity: 0 }, IN]]);
+const echo = (target, at) => T(target, [[at, { opacity: 0, scale: 1 }], [at + 0.01, { opacity: 0.9, scale: 1 }], [at + 0.8, { opacity: 0, scale: 1.06 }]]);
+function fly(target, at, from, to) {
+  const lift = Math.min(from[1], to[1]) - 70;
+  const mid = [(from[0] + to[0]) / 2, lift];
+  T(target, [[at, { translate: `${from[0]}px ${from[1]}px` }], [at + 0.45, { translate: `${mid[0]}px ${mid[1]}px` }, "cubic-bezier(.4,0,.7,.6)"], [at + 0.9, { translate: `${to[0]}px ${to[1]}px` }, "cubic-bezier(.3,.4,.3,1)"]]);
+  T(target, [[at, { opacity: 0, scale: 0.6 }], [at + 0.15, { opacity: 1, scale: 1 }], [at + 0.75, { opacity: 1, scale: 1 }], [at + 0.92, { opacity: 0, scale: 0.7 }]]);
+}
+
+/* 1. Copied here, needed there: 0 to 8 */
+scene("#s1", 0, 8);
+show("#c1a", 0.2, 2.2); rise("#c1a", 0.2);
+show("#c1b", 2.6, 4.5); rise("#c1b", 2.6);
+show("#c1c", 4.9, 8); rise("#c1c", 4.9);
+show("#l1", 0.1); rise("#l1", 0.1, 60, 0.9);
+move("#p1", [[0.6, 110, 250], [1.0, 110, 250], [1.6, 560, 262]]);
+T("#sel1", [[1.0, { scale: "0 1" }], [1.6, { scale: "1 1" }]]);
+show("#chip1", 1.75, 4.6, 0.25); pop("#chip1", 1.75);
+show("#ph1", 2.5); rise("#ph1", 2.5, 70, 0.9);
+blink("#caret1");
+T("#tap1", [[3.2, { opacity: 0, scale: 0.5 }], [3.3, { opacity: 0.9, scale: 0.7 }], [3.75, { opacity: 0, scale: 1.5 }]]);
+show("#paste1", 3.45, 3.95, 0.15); press("#paste1", 3.8);
+show("#empty1", 4.15, 8, 0.15);
+T("#empty1", [[4.15, { translate: "0 0" }], [4.25, { translate: "-9px 0" }, "linear"], [4.35, { translate: "9px 0" }, "linear"], [4.45, { translate: "-6px 0" }, "linear"], [4.55, { translate: "0 0" }, "linear"]]);
+["#w1", "#w2", "#w3"].forEach((id, n) => {
+  show(id, 5.2 + n * 0.3); rise(id, 5.2 + n * 0.3, 24, 0.5);
+  T(id + " u", [[6.3 + n * 0.3, { scale: "0 1" }], [6.65 + n * 0.3, { scale: "1 1" }]]);
+  T(id, [[6.3 + n * 0.3, { color: "#fff" }], [6.7 + n * 0.3, { color: "rgba(255,255,255,.45)" }]]);
+});
+
+/* 2. One thing at a time: 8 to 13 */
+scene("#s2", 8, 13);
+const slot = (id, at, leave) => T(id, leave == null
+  ? [[at, { translate: "0 -110px", opacity: 0, rotate: "0deg" }], [at + 0.5, { translate: "0 0", opacity: 1, rotate: "0deg" }, SPRING]]
+  : [[at, { translate: "0 -110px", opacity: 0, rotate: "0deg" }], [at + 0.5, { translate: "0 0", opacity: 1, rotate: "0deg" }, SPRING],
+     [leave, { translate: "0 0", opacity: 1, rotate: "0deg" }], [leave + 0.7, { translate: "40px 230px", opacity: 0, rotate: "7deg" }, IN]]);
+slot("#it1", 8.5, 9.75); slot("#it2", 9.8, 11.05); slot("#it3", 11.1);
+show("#c2", 10.2); rise("#c2", 10.2, 24, 0.6);
+
+/* 3. PasteHive: 13 to 17 */
+scene("#s3", 13, 17);
+document.querySelectorAll(".r3").forEach((ring, n) => T(ring, [[13.2 + n * 0.13, { opacity: 0, scale: 0.9 }], [13.9 + n * 0.13, { opacity: 0.34 - n * 0.05, scale: 1 }], [16, { opacity: 0.2 - n * 0.03, scale: 1.03 }, "linear"]]));
+T("#logo3", [[13.25, { scale: 0.5, opacity: 0 }], [13.9, { scale: 1, opacity: 1 }, SPRING]]);
+show("#name3", 13.7); rise("#name3", 13.7, 50);
+show("#tag3", 14.2); rise("#tag3", 14.2, 36);
+show("#line3", 14.7); rise("#line3", 14.7, 26);
+
+/* 4. History: 17 to 26.5 */
+scene("#s4", 17, 26.5);
+show("#l4", 17); rise("#l4", 17, 60, 0.9);
+show("#c4a", 17.5, 20.0); show("#c4b", 20.5, 22.1); show("#c4c", 22.6, 26.5);
+move("#p4", [[17, 640, 500], [17.9, 640, 500], [18.7, 520, 4], [19.5, 520, 4], [20.1, 420, 62], [21.7, 420, 62], [22.3, 480, 196], [23.1, 480, 196], [23.8, 520, 590]]);
+T("#edge4", [[18.6, { opacity: 0.35 }], [18.8, { opacity: 1 }], [19.4, { opacity: 0 }]]);
+drop("#panel4", 18.8, 23.0);
+hooks.push((t) => {
+  const typed = "flu".slice(0, Math.max(0, Math.min(3, Math.floor((t - 20.6) / 0.24) + 1)));
+  const field = $("#q4");
+  field.textContent = t >= 20.6 ? typed : "Search Clipboard";
+  field.className = t >= 20.6 ? "q" : "";
+});
+T("#all4", [[0, { opacity: 1 }], [21.0, { opacity: 1 }], [21.25, { opacity: 0 }]]);
+show("#hit4", 21.15, null, 0.25); rise("#hit4", 21.15, 14, 0.35);
+press("#hitrow4", 22.65);
+show("#pasted4", 23.2, null, 0.25); rise("#pasted4", 23.2, 12, 0.3);
+T("#ph4", [[23.15, { opacity: 1 }], [23.2, { opacity: 0 }]]);
+blink("#caret4");
+
+/* 5. Sync: 26.5 to 36 */
+scene("#s5", 26.5, 36);
+[["#lw5", 0], ["#ph5", 0.12], ["#lm5", 0.24]].forEach(([id, wait]) => { show(id, 26.5 + wait); rise(id, 26.5 + wait, 60, 0.9); });
+T("#sel5", [[27.4, { scale: "0 1" }], [28.0, { scale: "1 1" }], [30.4, { scale: "1 1" }], [30.6, { scale: "0 1" }]]);
+show("#chipw5", 28.05, 30.3, 0.2); pop("#chipw5", 28.05);
+fly("#t5a", 28.3, [320, 548], [960, 452]);
+fly("#t5b", 28.38, [320, 548], [1476, 392]);
+T("#eph5", [[29.15, { opacity: 0, scale: 1 }], [29.16, { opacity: 0.9, scale: 1 }], [29.95, { opacity: 0, scale: 1.06 }], [32.6, { opacity: 0, scale: 1 }], [32.61, { opacity: 0.9, scale: 1 }], [33.4, { opacity: 0, scale: 1.06 }]]);
+echo("#em5", 29.2);
+T("#pold", [[29.15, { translate: "0 0" }], [29.6, { translate: "0 4.2em" }], [32.6, { translate: "0 4.2em" }], [33.05, { translate: "0 8.4em" }]]);
+T("#pn1", [[29.15, { translate: "0 -1.5em", opacity: 0 }], [29.6, { translate: "0 0", opacity: 1 }], [32.6, { translate: "0 0", opacity: 1 }], [33.05, { translate: "0 4.2em", opacity: 1 }]]);
+T("#pn1 .row", [[32.6, { backgroundColor: "rgba(255,255,255,.16)" }], [33.0, { backgroundColor: "rgba(255,255,255,0)" }]]);
+T("#pn2", [[32.6, { translate: "0 -1.5em", opacity: 0 }], [33.05, { translate: "0 0", opacity: 1 }]]);
+drop("#panelm5", 29.2, 30.7);
+T("#ring5", [[31.0, { opacity: 0, scale: 1.08 }], [31.35, { opacity: 1, scale: 1 }], [33.9, { opacity: 1, scale: 1 }], [34.1, { opacity: 0, scale: 1 }]]);
+show("#chipm5", 31.4, 33.8, 0.2); pop("#chipm5", 31.4);
+fly("#t5c", 31.7, [1500, 560], [960, 452]);
+fly("#t5d", 31.78, [1500, 560], [444, 372]);
+echo("#ew5", 32.6);
+drop("#panelw5", 32.6, 34.6);
+show("#c5", 33.2); rise("#c5", 33.2, 24, 0.6);
+
+/* 6. Pairing: 36 to 43 */
+scene("#s6", 36, 43);
+[["#swpc", 37.0], ["#swmac", 37.3]].forEach(([id, at]) => {
+  T(id, [[at, { backgroundColor: "rgba(255,255,255,.1)", borderColor: "rgba(255,255,255,.3)" }], [at + 0.3, { backgroundColor: "#fff", borderColor: "#fff" }]]);
+  T(id + " i", [[at, { translate: "0 0", backgroundColor: "rgba(255,255,255,.75)" }], [at + 0.3, { translate: "26px 0", backgroundColor: "#000" }]]);
+});
+const state = (cls, from, to) => { show(cls, from, to, 0.25); rise(cls, from, 14, 0.35); };
+T(".pca", [[0, { opacity: 1 }], [37.75, { opacity: 1 }], [38.0, { opacity: 0 }]]);
+T(".maca", [[0, { opacity: 1 }], [37.75, { opacity: 1 }], [38.0, { opacity: 0 }]]);
+state(".pcb", 38.05, 39.0); state(".macb", 38.05, 39.0);
+press("#connect6", 38.75);
+state(".pcc", 39.3, 40.75); state(".macc", 39.3, 40.75);
+document.querySelectorAll(".pcc .dg, .macc .dg").forEach((digit, n) => T(digit, [[39.45 + (n % 6) * 0.07, { opacity: 0, translate: "0 12px" }], [39.75 + (n % 6) * 0.07, { opacity: 1, translate: "0 0" }]]));
+press("#accept6", 40.45);
+state(".pcd", 41.0); state(".macd", 41.0);
+T("#wire6", [[40.95, { scale: "0 1" }], [41.3, { scale: "1 1" }]]);
+T("#lock6", [[41.2, { scale: 0, opacity: 0 }], [41.6, { scale: 1, opacity: 1 }, SPRING]]);
+document.querySelectorAll(".bd").forEach((badge, n) => { show(badge, 41.5 + n * 0.14); rise(badge, 41.5 + n * 0.14, 24, 0.5); });
+
+/* 7. Where to get it: 43 to 48 */
+show("#s7", 43);
+document.querySelectorAll(".r7").forEach((ring, n) => T(ring, [[43.2 + n * 0.13, { opacity: 0, scale: 0.9 }], [43.9 + n * 0.13, { opacity: 0.3 - n * 0.05, scale: 1 }], [48, { opacity: 0.2 - n * 0.03, scale: 1.04 }, "linear"]]));
+T("#logo7", [[43.2, { scale: 0.5, opacity: 0 }], [43.85, { scale: 1, opacity: 1 }, SPRING]]);
+show("#name7", 43.6); rise("#name7", 43.6, 44);
+show("#free7", 44.0); rise("#free7", 44.0, 30);
+show("#plat7", 44.4); rise("#plat7", 44.4, 30);
+show("#url7", 44.9); rise("#url7", 44.9, 24);
+
+/* ------------------------------------------------------------------- clock */
+
+window.DURATION = DURATION;
+window.seek = (seconds) => {
+  const t = Math.max(0, Math.min(DURATION - 0.001, seconds));
+  for (const animation of animations) animation.currentTime = t * 1000;
+  for (const hook of hooks) hook(t);
+};
+window.ready = document.fonts.ready.then(() => { window.seek(0); });
+
+// Opened by hand: fit the window, and play, or stop at ?t=.
+if (!navigator.webdriver) {
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, innerHeight / 1080)})`; };
+  addEventListener("resize", fit); fit();
+  const fixed = new URLSearchParams(location.search).get("t");
+  if (fixed != null) window.ready.then(() => window.seek(+fixed));
+  else { const began = performance.now(); const tick = (now) => { window.seek(((now - began) / 1000) % DURATION); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+}
+</script>
+</body>
+</html>

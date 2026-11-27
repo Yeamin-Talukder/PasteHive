@@ -8,6 +8,7 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { Nav } from "@/components/Nav";
 import { Privacy } from "@/components/Privacy";
 import { Shortcuts } from "@/components/Shortcuts";
+import { Video } from "@/components/Video";
 
 export default function Home() {
   return (
@@ -23,6 +24,7 @@ export default function Home() {
       <Nav />
       <main>
         <Hero />
+        <Video />
         <HowItWorks />
         <Features />
         <Download />
