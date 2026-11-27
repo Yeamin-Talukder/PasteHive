@@ -23,7 +23,11 @@
 #     Developer account and is not set up here.
 #
 # Android signing
-#   Without the secrets below, the APK is signed with a debug key that the
+#   The secrets below are set for this repository, so a release is signed
+#   with the project's own key. Its keystore is kept by the maintainer,
+#   outside the repository.
+#
+#   Without the secrets, the APK is signed with a debug key that the
 #   build machine makes up on the spot. Each release then has a different
 #   key and cannot be installed over the previous one. To sign every release
 #   with one key of your own, create a keystore once:
