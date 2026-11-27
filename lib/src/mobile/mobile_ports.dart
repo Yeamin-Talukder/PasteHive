@@ -45,9 +45,13 @@ class PhoneBridge {
     return 'Phone';
   }
 
-  /// Text another app shared to this one that started it, if any. It is
-  /// handed over once.
-  Future<String?> takeSharedText() => _invoke<String>('takeSharedText');
+  /// Tells the Android side the app is ready for text, and takes whatever
+  /// was copied or shared before it was: when a copy starts the app, the
+  /// text is here. Each is handed over once.
+  Future<List<String>> takeSharedTexts() async {
+    final texts = await _invoke<List<Object?>>('takeSharedTexts');
+    return [...?texts?.whereType<String>()];
+  }
 
   /// Whether the user has switched on, in Android's accessibility settings,
   /// the service that notices a tap on Copy and sends the clipboard by
@@ -57,6 +61,10 @@ class PhoneBridge {
   /// Opens Android's accessibility settings, where that service is switched
   /// on or off.
   Future<void> openAutoCopySettings() => _invoke<void>('openAutoCopySettings');
+
+  /// Opens Android's page for this app, where a setting Android has
+  /// restricted is allowed.
+  Future<void> openAppInfo() => _invoke<void>('openAppInfo');
 
   /// Shows the notification that lets sync keep running while the app is
   /// not on screen, or takes it down.

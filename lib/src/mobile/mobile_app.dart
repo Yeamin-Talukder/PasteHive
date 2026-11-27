@@ -112,6 +112,7 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
                       onSendHistory: shell.shareHistory,
                       autoCopyOn: widget.bridge == null ? null : _autoCopyOn,
                       onOpenAutoCopy: widget.bridge?.openAutoCopySettings,
+                      onOpenAppInfo: widget.bridge?.openAppInfo,
                       onDone: () => shell.page.value = PanelPage.history,
                     ),
                   },

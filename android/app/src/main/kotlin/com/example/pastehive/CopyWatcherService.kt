@@ -4,45 +4,66 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Notices when the user taps Copy or Cut in any app, and has the clipboard
+ * Notices when the user copies something in any app, and has the clipboard
  * sent to the other devices without their doing anything more.
  *
  * Android does not tell apps when the clipboard changes and does not let
- * them read it from the background. What an accessibility service can see is
- * the tap itself: the button in the menu over selected text is labelled with
- * the system's own words for Copy and Cut. When one is tapped, this opens
- * the invisible capture activity, which may read the clipboard for the
- * instant it is in front.
+ * them read it from the background. What an accessibility service can see
+ * are two signs of a copy: a tap on a button labelled with the system's own
+ * word for Copy or Cut, and the small "copied" preview Android shows in the
+ * corner afterwards. On either, this opens the invisible capture activity,
+ * which may read the clipboard for the instant it is in front.
  *
- * It looks at nothing else: only the label of the thing that was tapped. It
- * is off until the user switches it on in Android's accessibility settings.
- * Copies made some other way (a keyboard's own clipboard, an app's custom
- * button with a different label) are not noticed.
+ * It looks at nothing else: only the label of what was tapped and the name
+ * of the window that appeared. It is off until the user switches it on in
+ * Android's accessibility settings.
+ *
+ * While it is on, Android keeps the app's process alive, so this also keeps
+ * sync running with the app's screen closed.
  */
 class CopyWatcherService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var lastCapture = 0L
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
-        // Taps inside this app are its own business.
-        if (event.packageName == packageName) return
-        if (!isCopyOrCut(event)) return
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.i(PhoneEngine.TAG, "copy watcher: on")
+        // Sync should be running whenever the watcher is, screen or no screen.
+        PhoneEngine.ensure(this)
+    }
 
-        // One tap can be reported twice; and the copy itself needs a moment
-        // to reach the clipboard before it is read.
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        event ?: return
+        // What happens inside this app is its own business.
+        if (event.packageName == packageName) return
+        val sign = when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED ->
+                if (isCopyOrCut(event)) "tap" else null
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
+                if (isCopiedPreview(event)) "preview" else null
+            else -> null
+        } ?: return
+
+        // One copy shows more than one sign; and the copy itself needs a
+        // moment to reach the clipboard before it is read.
         val now = System.currentTimeMillis()
         if (now - lastCapture < 700) return
         lastCapture = now
+        Log.i(PhoneEngine.TAG, "copy watcher: copy noticed ($sign) in ${event.packageName}")
         handler.postDelayed({
-            startActivity(
-                Intent(this, CaptureActivity::class.java)
-                    .putExtra(CaptureActivity.EXTRA_QUIET, true)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+            try {
+                startActivity(
+                    Intent(this, CaptureActivity::class.java)
+                        .putExtra(CaptureActivity.EXTRA_QUIET, true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+                )
+            } catch (e: Exception) {
+                Log.w(PhoneEngine.TAG, "copy watcher: could not open the capture", e)
+            }
         }, 250)
     }
 
@@ -59,7 +80,21 @@ class CopyWatcherService : AccessibilityService() {
             add(event.contentDescription?.toString())
         }
         return shown.any { text ->
-            text != null && labels.any { it.equals(text.trim(), ignoreCase = true) }
+            val label = text?.trim() ?: return@any false
+            // "Copy", and an app's own "Copy link", "Copy text" and the like.
+            labels.any {
+                label.equals(it, ignoreCase = true) ||
+                    label.startsWith("$it ", ignoreCase = true)
+            }
         }
+    }
+
+    // The preview Android itself shows after any copy, however it was made.
+    private fun isCopiedPreview(event: AccessibilityEvent): Boolean {
+        if (event.packageName != "com.android.systemui") return false
+        val window = event.className?.toString().orEmpty()
+        val title = event.text?.joinToString(" ").orEmpty()
+        return window.contains("clipboard", ignoreCase = true) ||
+            title.contains("clipboard", ignoreCase = true)
     }
 }

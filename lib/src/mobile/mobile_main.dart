@@ -65,6 +65,5 @@ Future<void> runPhoneApp() async {
   await shell.start();
   keepAlive();
 
-  final shared = await bridge.takeSharedText();
-  if (shared != null) shell.addCopied(shared);
+  (await bridge.takeSharedTexts()).forEach(shell.addCopied);
 }

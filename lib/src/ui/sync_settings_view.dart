@@ -17,6 +17,7 @@ class SyncSettingsView extends StatefulWidget {
     this.onSendHistory,
     this.autoCopyOn,
     this.onOpenAutoCopy,
+    this.onOpenAppInfo,
   });
 
   final SyncService sync;
@@ -30,6 +31,10 @@ class SyncSettingsView extends StatefulWidget {
 
   /// Opens the system setting that switches [autoCopyOn].
   final VoidCallback? onOpenAutoCopy;
+
+  /// Opens the system's page for this app, where the user lets it have a
+  /// setting the system has restricted.
+  final VoidCallback? onOpenAppInfo;
 
   /// Whether something translucent is behind this widget.
   final bool hasMaterial;
@@ -453,24 +458,36 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
           const SizedBox(height: 4),
           Text(
             on
-                ? 'When you tap Copy or Cut in any app, the text goes to '
+                ? 'When you copy something in any app, the text goes to '
                       'your other devices. Switch it off in Accessibility '
                       'settings.'
                 : 'Android only lets an app see a copy while that app is '
-                      'open. With the PasteHive accessibility service on, '
-                      'tapping Copy or Cut in any app sends the text by '
-                      'itself. It only notices the tap; it does not read '
-                      'your screen.',
+                      'open. Switch on the PasteHive accessibility service '
+                      'and what you copy in any app is sent by itself. It '
+                      'only notices that something was copied; it does not '
+                      'read your screen.\n\n'
+                      'If Android says the setting is restricted: open App '
+                      'Info, tap the three dots at the top right, choose '
+                      'Allow Restricted Settings, then switch it on again.',
             style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
           ),
           const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PanelButton(
-              label: 'Open Accessibility Settings',
-              palette: palette,
-              onPressed: widget.onOpenAutoCopy,
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              PanelButton(
+                label: 'Open Accessibility Settings',
+                palette: palette,
+                onPressed: widget.onOpenAutoCopy,
+              ),
+              if (!on && widget.onOpenAppInfo != null)
+                PanelButton(
+                  label: 'Open App Info',
+                  palette: palette,
+                  onPressed: widget.onOpenAppInfo,
+                ),
+            ],
           ),
         ],
       ),

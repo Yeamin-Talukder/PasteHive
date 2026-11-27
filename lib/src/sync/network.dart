@@ -81,6 +81,11 @@ class UdpDiscovery implements Discovery {
   RawDatagramSocket? _socket;
   Timer? _timer;
   List<int> _beacon = const [];
+  bool _checking = false;
+
+  /// This machine's addresses when the socket was opened; a change means it
+  /// has moved to another network, or back onto the same one.
+  String _addresses = '';
 
   @override
   Stream<PeerAnnouncement> get announcements => _announcements.stream;
@@ -99,7 +104,22 @@ class UdpDiscovery implements Discovery {
       port: port,
       tag: tag,
     );
+    // A failure here is the caller's to report; later ones are retried.
+    await _open();
+    _send();
+    _timer = Timer.periodic(interval, (_) => _check());
+  }
 
+  @override
+  Future<void> stop() async {
+    _timer?.cancel();
+    _timer = null;
+    _socket?.close();
+    _socket = null;
+  }
+
+  Future<void> _open() async {
+    final addresses = await _localAddresses();
     final socket = await RawDatagramSocket.bind(
       InternetAddress.anyIPv4,
       kDiscoveryPort,
@@ -109,30 +129,71 @@ class UdpDiscovery implements Discovery {
       reusePort: !Platform.isWindows,
     );
     socket.broadcastEnabled = true;
-    _socket = socket;
     await _joinGroup(socket);
-
-    socket.listen((event) {
-      if (event != RawSocketEvent.read) return;
-      final datagram = socket.receive();
-      if (datagram == null) return;
-      final announcement = decodeBeacon(
-        datagram.data,
-        datagram.address.address,
-      );
-      if (announcement != null) _announcements.add(announcement);
-    });
-
-    _send();
-    _timer = Timer.periodic(interval, (_) => _send());
+    socket.listen(
+      (event) {
+        if (event != RawSocketEvent.read) return;
+        final datagram = socket.receive();
+        if (datagram == null) return;
+        final announcement = decodeBeacon(
+          datagram.data,
+          datagram.address.address,
+        );
+        if (announcement != null) _announcements.add(announcement);
+      },
+      // The system can take a socket away, as a phone does when it sleeps
+      // or changes network. The next round opens another.
+      onError: (Object _) => _drop(socket),
+      onDone: () => _drop(socket),
+    );
+    _socket = socket;
+    _addresses = addresses;
   }
 
-  @override
-  Future<void> stop() async {
-    _timer?.cancel();
-    _timer = null;
-    _socket?.close();
-    _socket = null;
+  void _drop(RawDatagramSocket socket) {
+    if (identical(_socket, socket)) _socket = null;
+    socket.close();
+  }
+
+  /// Sends the beacon, first making sure there is a working socket on the
+  /// network the machine is on now. Membership of the multicast group
+  /// belongs to a network connection, so it is lost when Wi-Fi drops and
+  /// comes back even though the socket itself survives; without rejoining,
+  /// the device would announce itself and hear nobody.
+  Future<void> _check() async {
+    if (_checking) return;
+    _checking = true;
+    try {
+      final current = _socket;
+      if (current != null && await _localAddresses() != _addresses) {
+        _drop(current);
+      }
+      if (_timer == null) return;
+      if (_socket == null) await _open();
+      _send();
+    } on SocketException {
+      // No network for the moment; the next round tries again.
+    } on OSError {
+      // Same.
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<String> _localAddresses() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
+      final addresses = [
+        for (final interface in interfaces)
+          for (final address in interface.addresses)
+            '${interface.name}/${address.address}',
+      ]..sort();
+      return addresses.join(',');
+    } on SocketException {
+      return '';
+    }
   }
 
   Future<void> _joinGroup(RawDatagramSocket socket) async {

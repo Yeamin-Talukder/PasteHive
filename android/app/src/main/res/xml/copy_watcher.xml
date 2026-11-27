@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only taps are reported, and only what the tapped thing is labelled; the
-     service does not read what is on screen. -->
+<!-- Only taps and newly shown windows are reported, and only what the tapped
+     thing is labelled or the window is called; the service does not read
+     what is on screen. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeViewClicked"
+    android:accessibilityEventTypes="typeViewClicked|typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
     android:description="@string/copy_watcher_description"
