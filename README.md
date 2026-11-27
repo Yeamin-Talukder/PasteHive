@@ -11,6 +11,10 @@
 </p>
 
 <p align="center">
+  <b>Website: <a href="https://yeamin-talukder.github.io/PasteHive/">yeamin-talukder.github.io/PasteHive</a></b>
+</p>
+
+<p align="center">
   <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Windows" src="https://img.shields.io/badge/Download-Windows-111111?style=for-the-badge"></a>
   <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for macOS" src="https://img.shields.io/badge/Download-macOS-111111?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Android" src="https://img.shields.io/badge/Download-Android-111111?style=for-the-badge&logo=android&logoColor=white"></a>
@@ -35,6 +39,7 @@
 </p>
 
 <p align="center">
+  <a href="https://yeamin-talukder.github.io/PasteHive/">Website</a> ·
   <a href="#features">Features</a> ·
   <a href="#download">Download</a> ·
   <a href="#sync-your-clipboard-between-devices">Sync</a> ·
@@ -111,9 +116,19 @@ other on your Wi-Fi or wired network and talk directly, encrypted.
 
 Android does not let an app watch the clipboard in the background. On a phone
 PasteHive reads the clipboard each time it comes to the front, and also takes
-text from Share and from the text-selection menu. While sync is on, a
-notification keeps the connection alive. Pictures arrive in the list but cannot
-yet be put on the phone's clipboard.
+text from Share, from the text-selection menu, and from the **Send clipboard**
+button in its notification or quick-settings tile. While sync is on, a
+notification keeps the connection alive. Text copied on another device is put
+on the phone's clipboard; pictures arrive in the list but cannot yet be put
+there.
+
+**Sending copies automatically on Android.** Switch on the PasteHive
+accessibility service (Sync Settings, **This Phone**) and what you copy in any
+app is sent by itself, with the app closed. The service only notices that
+something was copied; it does not read the screen. Android treats this as a
+restricted setting for apps installed from outside the Play Store, so it has to
+be allowed once under the app's App Info page. It sends text only, and has been
+tested on Android 17 on a Pixel.
 
 ## Download
 
@@ -306,6 +321,8 @@ The two desktop systems need different approaches.
 | `lib/src/mobile/` | The Android app |
 | `lib/src/app_shell.dart` | Ties capture, tray and panel together |
 | `design/logo/` | Logo sources, icon exports and the banner |
+| `website/` | The [website](https://yeamin-talukder.github.io/PasteHive/), published by GitHub Actions |
+| `.github/workflows/` | Build and test, release, and website publishing |
 
 Everything that touches the operating system is behind an interface in
 `ports.dart`, so the logic and the UI are tested with fakes.
