@@ -1,6 +1,8 @@
 package com.example.pastehive
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -8,6 +10,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
@@ -42,6 +45,16 @@ object PhoneEngine {
 
     /** What was last handed over, so the same copy is not sent twice. */
     private var lastText: String? = null
+
+    /** When this app last put something on the clipboard itself. */
+    private var lastWrite = 0L
+
+    /**
+     * Whether the clipboard was just written by this app: Android shows its
+     * copied preview for that too, and it is not a copy to look at.
+     */
+    fun wroteJustNow(): Boolean =
+        lastWrite != 0L && SystemClock.elapsedRealtime() - lastWrite < 2000
 
     /** Lets the phone hear what other devices announce to the whole network. */
     private var multicastLock: WifiManager.MulticastLock? = null
@@ -108,6 +121,14 @@ object PhoneEngine {
                 result.success(ArrayList(pending))
                 pending.clear()
             }
+            // The clipboard is read and written here and not through Flutter's
+            // own channel, which answers only while there is a screen: without
+            // one a call to it never returns.
+            "readClipboard" -> result.success(readClipboard(app))
+            "writeClipboard" -> {
+                writeClipboard(app, call.arguments as? String ?: "")
+                result.success(null)
+            }
             "autoCopyOn" -> result.success(autoCopyOn(app))
             "openAutoCopySettings" -> {
                 open(app, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -133,6 +154,30 @@ object PhoneEngine {
                 result.success(null)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    /** The text on the clipboard; null when Android will not show it. */
+    private fun readClipboard(app: Context): String? = try {
+        val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.coerceToText(app)
+            ?.toString()
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun writeClipboard(app: Context, text: String) {
+        try {
+            val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("PasteHive", text))
+            // What this app put there is not a copy to send back.
+            lastText = text
+            lastWrite = SystemClock.elapsedRealtime()
+        } catch (e: Exception) {
+            Log.w(TAG, "the clipboard could not be written", e)
         }
     }
 

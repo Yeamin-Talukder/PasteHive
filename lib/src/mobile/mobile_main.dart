@@ -44,7 +44,7 @@ Future<void> runPhoneApp() async {
       pollInterval: const Duration(days: 1),
     ),
     sync: sync,
-    clipboard: const PhoneClipboard(),
+    clipboard: PhoneClipboard(bridge),
     tray: const NoTray(),
     onQuit: () async {},
     images: ImageVault(Directory(path.join(supportDirectory.path, 'images'))),

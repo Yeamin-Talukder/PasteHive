@@ -66,14 +66,22 @@ class PhoneBridge {
   /// restricted is allowed.
   Future<void> openAppInfo() => _invoke<void>('openAppInfo');
 
+  /// The text on the phone's clipboard; null when the system will not show
+  /// it, as when the app is not in front.
+  Future<String?> readClipboard() => _invoke<String>('readClipboard');
+
+  /// Puts [text] on the phone's clipboard.
+  Future<void> writeClipboard(String text) =>
+      _invoke<void>('writeClipboard', text);
+
   /// Shows the notification that lets sync keep running while the app is
   /// not on screen, or takes it down.
   Future<void> setKeepAlive(bool on) =>
       _invoke<void>(on ? 'startKeepAlive' : 'stopKeepAlive');
 
-  Future<T?> _invoke<T>(String method) async {
+  Future<T?> _invoke<T>(String method, [Object? argument]) async {
     try {
-      return await _channel.invokeMethod<T>(method);
+      return await _channel.invokeMethod<T>(method, argument);
     } on PlatformException {
       return null;
     } on MissingPluginException {
@@ -84,8 +92,14 @@ class PhoneBridge {
 
 /// The phone's clipboard: text only, and readable only while the app is on
 /// screen.
+///
+/// It goes through the app's own Android code. Flutter's clipboard calls
+/// answer only while the app has a screen, and this app also runs without
+/// one: a call made then would never return.
 class PhoneClipboard implements ClipboardPort {
-  const PhoneClipboard();
+  const PhoneClipboard(this.bridge);
+
+  final PhoneBridge bridge;
 
   // The system does not report clipboard changes to apps; the app looks
   // each time it comes to the front instead.
@@ -96,15 +110,7 @@ class PhoneClipboard implements ClipboardPort {
   void Function() watch(void Function() onChanged) => () {};
 
   @override
-  Future<String?> readText() async {
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      return data?.text;
-    } on PlatformException {
-      // Refused, as it is when the app is not in front.
-      return null;
-    }
-  }
+  Future<String?> readText() => bridge.readClipboard();
 
   @override
   Future<List<String>> readFiles() async => const [];
@@ -114,9 +120,7 @@ class PhoneClipboard implements ClipboardPort {
 
   @override
   bool writeText(String text) {
-    unawaited(
-      Clipboard.setData(ClipboardData(text: text)).catchError((Object _) {}),
-    );
+    unawaited(bridge.writeClipboard(text));
     return true;
   }
 

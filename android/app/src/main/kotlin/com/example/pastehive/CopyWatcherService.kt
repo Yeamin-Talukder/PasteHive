@@ -48,6 +48,10 @@ class CopyWatcherService : AccessibilityService() {
             else -> null
         } ?: return
 
+        // Text that arrived from another device and was put on the clipboard
+        // by this app shows the same preview.
+        if (PhoneEngine.wroteJustNow()) return
+
         // One copy shows more than one sign; and the copy itself needs a
         // moment to reach the clipboard before it is read.
         val now = System.currentTimeMillis()
@@ -90,11 +94,16 @@ class CopyWatcherService : AccessibilityService() {
     }
 
     // The preview Android itself shows after any copy, however it was made.
+    // It is the one system window reported as a bare frame: the volume panel
+    // and the other system dialogs report a class of their own, and the
+    // notification shade reports nothing. (Seen on Android 17; a tap on the
+    // Copy button of the text-selection menu is not reported at all there.)
+    // Should some other system window match, the cost is one needless look
+    // at the clipboard, which sends nothing when the text has not changed.
     private fun isCopiedPreview(event: AccessibilityEvent): Boolean {
         if (event.packageName != "com.android.systemui") return false
         val window = event.className?.toString().orEmpty()
-        val title = event.text?.joinToString(" ").orEmpty()
-        return window.contains("clipboard", ignoreCase = true) ||
-            title.contains("clipboard", ignoreCase = true)
+        return window == "android.widget.FrameLayout" ||
+            window.contains("clipboard", ignoreCase = true)
     }
 }
