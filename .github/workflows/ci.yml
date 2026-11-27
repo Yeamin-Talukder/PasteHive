@@ -1,0 +1,41 @@
+# Runs for every push to main and every pull request that touches the app:
+# analyze, test, and build for Windows, macOS and Android. The built files
+# are kept with the run (see "Artifacts" on the run's page), so a change can
+# be tried on a real device before it is released.
+#
+# Changes that only touch the website, the docs or the design files do not
+# start it; the website has its own workflow.
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "website/**"
+      - ".github/workflows/website.yml"
+      - "docs/**"
+      - "design/**"
+      - "**.md"
+      - "LICENSE"
+  pull_request:
+    paths-ignore:
+      - "website/**"
+      - ".github/workflows/website.yml"
+      - "docs/**"
+      - "design/**"
+      - "**.md"
+      - "LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
