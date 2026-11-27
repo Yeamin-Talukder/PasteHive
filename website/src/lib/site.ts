@@ -10,6 +10,8 @@ export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 export const REPO_URL = "https://github.com/Yeamin-Talukder/PasteHive";
+export const REPO_API_URL =
+  "https://api.github.com/repos/Yeamin-Talukder/PasteHive";
 export const RELEASES_URL = `${REPO_URL}/releases/latest`;
 export const BUILD_URL = `${REPO_URL}#build-from-source`;
 export const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
@@ -24,3 +26,22 @@ export const NAV_LINKS = [
   { href: "#shortcuts", label: "Shortcuts" },
   { href: "#faq", label: "FAQ" },
 ] as const;
+
+/**
+ * The newest release's files. The release workflow publishes them under
+ * these fixed names, so the links start a download without a stop at GitHub.
+ */
+const LATEST = `${REPO_URL}/releases/latest/download`;
+export const DOWNLOADS = {
+  windows: {
+    name: "Windows",
+    kind: "zip",
+    url: `${LATEST}/PasteHive-windows-x64.zip`,
+  },
+  macos: { name: "macOS", kind: "zip", url: `${LATEST}/PasteHive-macos.zip` },
+  android: {
+    name: "Android",
+    kind: "APK",
+    url: `${LATEST}/PasteHive-android.apk`,
+  },
+} as const;

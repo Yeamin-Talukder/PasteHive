@@ -1,6 +1,4 @@
-import { ArrowUpRight, Download } from "lucide-react";
-import { BUILD_URL, RELEASES_URL, REPO_URL } from "@/lib/site";
-import { GithubIcon } from "./icons";
+import { HeroDownloads } from "./HeroDownloads";
 import { HeroStage } from "./hero/HeroStage";
 
 /** The logo's backdrop: outlines of the tile's shape, repeating outward. */
@@ -72,45 +70,7 @@ export function Hero() {
           Encrypted, with no cloud and no account.
         </p>
 
-        <div className="mt-[clamp(0.8rem,2.2svh,1.6rem)] flex flex-wrap items-center justify-center gap-2.5">
-          <a
-            href={RELEASES_URL}
-            className="group relative inline-flex h-11 items-center gap-2 overflow-hidden rounded-full bg-white px-5 text-[0.95rem] font-semibold text-black transition duration-200 ease-out-soft hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgb(255_255_255/0.5)] active:translate-y-0 active:scale-[0.98]"
-          >
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-black/15 to-transparent opacity-0 group-hover:animate-sheen group-hover:opacity-100"
-            />
-            <Download
-              size={17}
-              strokeWidth={2.4}
-              className="transition-transform duration-200 group-hover:translate-y-0.5"
-            />
-            Download
-          </a>
-          <a
-            href={REPO_URL}
-            className="group inline-flex h-11 items-center gap-2 rounded-full border border-white/20 bg-white/[0.06] px-5 text-[0.95rem] font-medium text-white transition duration-200 ease-out-soft hover:-translate-y-0.5 hover:border-white/50 hover:bg-white/[0.12] active:translate-y-0 active:scale-[0.98]"
-          >
-            <GithubIcon className="h-[17px] w-[17px]" />
-            View on GitHub
-            <ArrowUpRight
-              size={15}
-              className="text-white/60 transition duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white"
-            />
-          </a>
-        </div>
-
-        <p className="mt-2.5 text-[0.78rem] text-faint">
-          Free for Windows, macOS and Android. Or{" "}
-          <a
-            href={BUILD_URL}
-            className="text-white/80 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
-          >
-            build it from source
-          </a>
-          .
-        </p>
+        <HeroDownloads />
       </div>
 
       <div className="relative mx-auto mb-4 mt-[clamp(0.75rem,2.4svh,2rem)] min-h-0 w-full max-w-[1560px] flex-1 px-4 lg:mb-6 lg:px-10">
