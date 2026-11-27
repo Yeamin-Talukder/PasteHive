@@ -239,8 +239,9 @@ export function Download() {
             </strong>{" "}
             Windows may warn the first time (More info, then Run anyway), and
             macOS blocks the app until you choose Open Anyway under System
-            Settings, Privacy &amp; Security. On Android, uninstall an older
-            version before installing a new one. The download buttons open
+            Settings, Privacy &amp; Security. On Android, a copy older than
+            1.0.1 has to be uninstalled once before a newer one installs. The
+            download buttons open
             the latest release; you can also{" "}
             <a
               href="#build-from-source"

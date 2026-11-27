@@ -161,10 +161,11 @@ on the [releases page](https://github.com/Yeamin-Talukder/PasteHive/releases).
 - **macOS**: unzip and move the app to Applications. It is not notarized, so
   macOS blocks it at first: open **System Settings > Privacy & Security** and
   choose **Open Anyway**. Pasting needs the Accessibility permission.
-- **Android**: open the APK on the phone and allow the install. Releases are
-  not yet signed with one fixed key, so a new version cannot be installed
-  over an older one: uninstall the old one first (its history and pairing go
-  with it).
+- **Android**: open the APK on the phone and allow the install. From 1.0.1
+  on, every release is signed with the same key, so a new version installs
+  over the old one. Version 1.0.0, or a copy you built yourself, was signed
+  differently and has to be uninstalled once first (its history and pairing
+  go with it).
 
 Once installed, the app can fetch later versions by itself from **About**.
 
