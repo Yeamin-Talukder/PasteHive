@@ -8,7 +8,10 @@
 //   public/video/pastehive.mp4    H.264, plays everywhere
 //   public/video/pastehive.webm   VP9, smaller where it is supported
 //   public/video/poster.jpg       the frame shown before it plays
+//   public/video/captions.vtt     the narration as captions
 //   ../docs/video.gif             a small silent copy for the GitHub README
+// The pictures are made here; sound.mjs then adds the music, the sound
+// effects and the narration to both video files.
 //
 // Stills only, to check a change without rendering everything:
 //   node video/render.mjs --stills 3.9,10.5,21.6
@@ -134,4 +137,7 @@ await ffmpeg([
   "fps=10,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
   "-loop", "0", gifPath,
 ]).done;
+// Last, the sound: music, effects and narration (see sound.mjs).
+const sound = spawn(process.execPath, [path.join(here, "sound.mjs")], { stdio: "inherit" });
+await new Promise((resolve, reject) => sound.on("exit", (code) => (code === 0 ? resolve() : reject(new Error("sound.mjs failed")))));
 console.log("Done.");

@@ -24,7 +24,7 @@ const CHAPTERS = [
 
 /**
  * The 48-second film. It is rendered from website/video/video.html, an
- * animation rather than a recording, and has no sound.
+ * animation rather than a recording, with narration, music and captions.
  */
 export function Video() {
   return (
@@ -43,7 +43,6 @@ export function Video() {
           <div className="overflow-hidden rounded-3xl border border-white/15 bg-black shadow-[0_40px_80px_-40px_rgb(0_0_0),inset_0_1px_0_rgb(255_255_255/0.12)] transition-colors duration-300 hover:border-white/30">
             <video
               controls
-              muted
               playsInline
               preload="none"
               poster={`${BASE}/video/poster.jpg`}
@@ -54,12 +53,19 @@ export function Video() {
             >
               <source src={`${BASE}/video/pastehive.webm`} type="video/webm" />
               <source src={`${BASE}/video/pastehive.mp4`} type="video/mp4" />
+              <track
+                kind="captions"
+                src={`${BASE}/video/captions.vtt`}
+                srcLang="en"
+                label="English"
+              />
               Your browser cannot play this video.{" "}
               <a href={`${BASE}/video/pastehive.mp4`}>Download it</a> instead.
             </video>
           </div>
           <figcaption className="mt-3 text-center text-[0.82rem] text-faint">
-            An animation, not a screen recording. No sound.
+            An animation, not a screen recording. Narrated by a synthetic
+            voice, with captions.
           </figcaption>
         </figure>
       </Reveal>

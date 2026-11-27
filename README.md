@@ -52,7 +52,7 @@
 <p align="center">
   <a href="https://yeamin-talukder.github.io/PasteHive/#video"><img src="docs/video.gif" alt="PasteHive in 48 seconds: you copy on one device and need it on another; PasteHive keeps a searchable clipboard history, syncs it between your devices, and pairs them with a six-digit code" width="100%"></a>
   <br>
-  <sub>The 48-second video, as a silent GIF. <a href="https://yeamin-talukder.github.io/PasteHive/#video">Watch it in full quality on the website</a>.</sub>
+  <sub>The 48-second video, as a silent GIF. <a href="https://yeamin-talukder.github.io/PasteHive/#video">Watch it with narration and music on the website</a>.</sub>
 </p>
 
 <p align="center">

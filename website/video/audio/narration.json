@@ -1,0 +1,11 @@
+[
+  {"at":0.5,"until":2.5,"text":"You copy something on your computer.","say":"You copy something on your computer."},
+  {"at":2.9,"until":4.6,"text":"But you need it on your phone.","say":"But you need it on your phone."},
+  {"at":5.1,"until":7.7,"text":"So you send it to yourself. Again.","say":"So you send it to yourself. Again."},
+  {"at":8.3,"until":12.95,"text":"And your clipboard only remembers one thing. Copy again, and the last one is gone.","say":"And your clipboard only remembers one thing. Copy again, and the last one is gone."},
+  {"at":13.7,"until":16.9,"text":"This is PasteHive. Copy here. Paste there.","say":"This is Paste Hive. Copy here. Paste there."},
+  {"at":17.5,"until":26.2,"text":"It keeps everything you copy. Push the pointer to the top of the screen, search, and pick. It's pasted right where you were typing.","say":"It keeps everything you copy. Push the pointer to the top of the screen, search, and pick. It's pasted right where you were typing."},
+  {"at":26.9,"until":35.9,"text":"Copy on one device, paste on another. Text and pictures travel straight between your devices, on the same network. Encrypted, with no cloud.","say":"Copy on one device, paste on another. Text and pictures travel straight between your devices, on the same network. Encrypted, with no cloud."},
+  {"at":36.6,"until":42.7,"text":"Pair once, with a six-digit code. No key to type, no account to create.","say":"Pair once, with a six-digit code. No key to type, no account to create."},
+  {"at":43.4,"until":47.8,"text":"PasteHive. Free and open source, for Windows, macOS and Android.","say":"Paste Hive. Free and open source, for Windows, Mac O S, and Android."}
+]
