@@ -1,8 +1,6 @@
 package com.example.pastehive
 
 import android.app.Activity
-import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -50,30 +48,24 @@ class CaptureActivity : Activity() {
         if (!hasFocus || done) return
         done = true
         val quiet = intent?.getBooleanExtra(EXTRA_QUIET, false) == true
-        val text = try {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.coerceToText(this)
-                ?.toString()
-        } catch (e: Exception) {
-            Log.w(PhoneEngine.TAG, "capture: the clipboard could not be read", e)
-            null
-        }
-        Log.i(PhoneEngine.TAG, "capture: read ${text?.length ?: 0} characters, quiet=$quiet")
-        if (text.isNullOrBlank()) {
+        val something = PhoneEngine.clipboardHasContent(this)
+        Log.i(PhoneEngine.TAG, "capture: something to send=$something, quiet=$quiet")
+        if (!something) {
             if (!quiet) {
                 Toast.makeText(this, "Nothing on the clipboard to send", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            PhoneEngine.deliver(this, text, onlyIfNew = quiet)
+            finish()
+            overridePendingTransition(0, 0)
+            return
+        }
+        // Text or a picture: the app reads it while this window has focus.
+        PhoneEngine.capture(this, onlyIfNew = quiet) {
             if (!quiet) {
                 Toast.makeText(this, "Sent to your devices", Toast.LENGTH_SHORT).show()
             }
+            finish()
+            overridePendingTransition(0, 0)
         }
-        finish()
-        overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {

@@ -130,17 +130,18 @@ Android does not let an app watch the clipboard in the background. On a phone
 PasteHive reads the clipboard each time it comes to the front, and also takes
 text from Share, from the text-selection menu, and from the **Send clipboard**
 button in its notification or quick-settings tile. While sync is on, a
-notification keeps the connection alive. Text copied on another device is put
-on the phone's clipboard; pictures arrive in the list but cannot yet be put
-there.
+notification keeps the connection alive. Text and pictures copied on another
+device are put on the phone's clipboard, and a picture copied on the phone is
+sent to the others. A large photo is made smaller first, so that it fits the
+5 MB limit as a PNG.
 
 **Sending copies automatically on Android.** Switch on the PasteHive
 accessibility service (Sync Settings, **This Phone**) and what you copy in any
 app is sent by itself, with the app closed. The service only notices that
 something was copied; it does not read the screen. Android treats this as a
 restricted setting for apps installed from outside the Play Store, so it has to
-be allowed once under the app's App Info page. It sends text only, and has been
-tested on Android 17 on a Pixel.
+be allowed once under the app's App Info page. It has been tested on Android 17
+on a Pixel.
 
 ## Download
 
@@ -242,8 +243,7 @@ PasteHive server.
 No. Both devices have to be on the same local network.
 
 **Can I copy on Windows and paste on a Mac or an Android phone?**
-Yes, for text and pictures, once the devices are paired. On Android, pictures
-arrive in the list but cannot yet be put on the clipboard.
+Yes, for text and pictures, once the devices are paired.
 
 **Does it replace the Windows clipboard history (Win+V) or Apple's Universal Clipboard?**
 It works alongside them. PasteHive adds search, filters, pinning and sync

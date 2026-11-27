@@ -75,11 +75,11 @@ class CopyWatcherService : AccessibilityService() {
      */
     private fun readClipboard() {
         val windows = getSystemService(WINDOW_SERVICE) as WindowManager
-        var finished = false
+        var removed = false
         lateinit var probe: View
-        fun finish(text: String?, how: String) {
-            if (finished) return
-            finished = true
+        fun remove() {
+            if (removed) return
+            removed = true
             // Not from inside the window's own focus report: Android is
             // still using the window at that point and crashes without it.
             handler.post {
@@ -89,13 +89,15 @@ class CopyWatcherService : AccessibilityService() {
                     // Already gone.
                 }
             }
-            Log.i(PhoneEngine.TAG, "copy watcher: read ${text?.length ?: 0} characters ($how)")
-            if (!text.isNullOrBlank()) PhoneEngine.deliver(this, text, onlyIfNew = true)
         }
+        var asked = false
         probe = object : View(this) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (hasWindowFocus) finish(PhoneEngine.readClipboard(this@CopyWatcherService), "focus")
+                if (!hasWindowFocus || asked) return
+                asked = true
+                Log.i(PhoneEngine.TAG, "copy watcher: reading the clipboard")
+                PhoneEngine.capture(this@CopyWatcherService, onlyIfNew = true) { remove() }
             }
         }
         val params = WindowManager.LayoutParams(
@@ -120,7 +122,7 @@ class CopyWatcherService : AccessibilityService() {
             return
         }
         // Never linger: if focus is not given, give up.
-        handler.postDelayed({ finish(null, "no focus") }, 1500)
+        handler.postDelayed({ if (!asked) remove() }, 1500)
     }
 
     override fun onInterrupt() {}

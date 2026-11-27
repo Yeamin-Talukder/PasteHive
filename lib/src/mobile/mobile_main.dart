@@ -70,6 +70,12 @@ Future<void> runPhoneApp() async {
   // treated as copied: the system does not let the app see a copy made in
   // another app while it is in the background, so this is the way in.
   bridge.onSharedText = shell.addCopied;
+  // A copy was noticed in another app (or Send clipboard was pressed):
+  // for this moment the clipboard can be read, text or picture.
+  bridge.onCapture = () async {
+    shell.captureNow();
+    await shell.captured;
+  };
 
   // While sync is on, a notification keeps the app alive in the background,
   // so what is copied on the computers still arrives.

@@ -29,6 +29,10 @@ class PhoneBridge {
       if (call.method == 'sharedText') {
         final text = call.arguments;
         if (text is String) onSharedText?.call(text);
+      } else if (call.method == 'capture') {
+        // Answered only once the clipboard has been read: the Android
+        // side is holding a window in front for exactly that long.
+        await onCapture?.call();
       }
     });
   }
@@ -37,6 +41,10 @@ class PhoneBridge {
 
   /// Called with text another app shared to this one while it was running.
   void Function(String text)? onSharedText;
+
+  /// Called when a copy was noticed, or sending was asked for by hand: the
+  /// clipboard can be read right now, and should be.
+  Future<void> Function()? onCapture;
 
   /// The phone's model name, for other devices to show.
   Future<String> deviceName() async {
@@ -76,6 +84,21 @@ class PhoneBridge {
   /// it, as when the app is not in front.
   Future<String?> readClipboard() => _invoke<String>('readClipboard');
 
+  /// The picture on the phone's clipboard, if there is one and the system
+  /// will show it.
+  Future<ClipboardImage?> readClipboardImage() async {
+    final image = await _invoke<Map<Object?, Object?>>('readClipboardImage');
+    final png = image?['png'];
+    final width = image?['width'];
+    final height = image?['height'];
+    if (png is! Uint8List || width is! int || height is! int) return null;
+    return ClipboardImage(png: png, width: width, height: height);
+  }
+
+  /// Puts the stored picture at [path] on the phone's clipboard.
+  Future<bool> writeClipboardImage(String path) async =>
+      await _invoke<bool>('writeClipboardImage', path) ?? false;
+
   /// Puts [text] on the phone's clipboard.
   Future<void> writeClipboard(String text) =>
       _invoke<void>('writeClipboard', text);
@@ -104,8 +127,8 @@ class PhoneBridge {
   }
 }
 
-/// The phone's clipboard: text only, and readable only while the app is on
-/// screen.
+/// The phone's clipboard: text and pictures, readable only while the app has
+/// a window in front.
 ///
 /// It goes through the app's own Android code. Flutter's clipboard calls
 /// answer only while the app has a screen, and this app also runs without
@@ -130,7 +153,7 @@ class PhoneClipboard implements ClipboardPort {
   Future<List<String>> readFiles() async => const [];
 
   @override
-  Future<ClipboardImage?> readImage() async => null;
+  Future<ClipboardImage?> readImage() => bridge.readClipboardImage();
 
   @override
   bool writeText(String text) {
@@ -138,10 +161,13 @@ class PhoneClipboard implements ClipboardPort {
     return true;
   }
 
-  // Pictures and files are shown in the list but cannot be put on the
-  // phone's clipboard from here yet.
   @override
-  bool writeImage(String path) => false;
+  bool writeImage(String path) {
+    unawaited(bridge.writeClipboardImage(path));
+    return true;
+  }
+
+  // Files copied on a computer are listed but mean nothing on a phone.
 
   @override
   bool writeFiles(List<String> paths) => false;

@@ -100,16 +100,17 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice"/>
 
-        <!-- Lets Android's installer read an update this app downloaded
-             into its own cache, and nothing else. -->
+        <!-- Lets another app read one file this app points it at, and
+             nothing else: a downloaded update for Android's installer,
+             or a stored picture for whichever app pastes it. -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.updates"
+            android:authorities="${applicationId}.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/update_files"/>
+                android:resource="@xml/shared_files"/>
         </provider>
 
         <!-- Don't delete the meta-data below.
