@@ -4,6 +4,9 @@
 # main does the same and then publishes the result. It can also be published
 # by hand: Actions > Website > Run workflow.
 #
+# The site carries a copy of the release list, saved when it is built, so it
+# is also rebuilt and published each time a release comes out.
+#
 # In the repository's settings, Pages must have "GitHub Actions" as its
 # source. The address and sub-path are read from those settings, so nothing
 # here changes if a custom domain is added later.
@@ -19,6 +22,14 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/website.yml"
+  # A release published by the Release workflow. (Its own "release" event
+  # does not start other workflows, so this waits for that workflow to end.)
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  # After publishing or changing a release by hand on GitHub, run this by
+  # hand too. (A run started by the release itself would build from the
+  # release's tag, and only main may publish the site.)
   workflow_dispatch:
 
 permissions:
@@ -31,6 +42,8 @@ concurrency:
 jobs:
   build:
     name: Check and build
+    # Not after a Release run that failed: nothing new was published.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,6 +85,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+        env:
+          # Signs the request that saves the release list into the site.
+          GH_TOKEN: ${{ github.token }}
 
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5

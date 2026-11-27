@@ -5,13 +5,18 @@ import { REPO_API_URL } from "./site";
 
 /**
  * What GitHub knows about the project: its stars and every published
- * release with its files. Read from GitHub's public API in the visitor's
- * browser, so the numbers and the list are the real ones at that moment.
+ * release with its files.
  *
- * One request per page for everything that needs it (the hero's counts, the
- * version chooser), kept for ten minutes. GitHub allows a visitor 60
- * requests an hour; when it refuses, or the visitor is offline, callers get
- * "unavailable" and fall back to the fixed links to the latest files.
+ * It comes from two places. The site carries a copy saved when it was
+ * built (public/project.json, written by scripts/fetch-project.mjs), which
+ * is shown at once and is always there. The visitor's browser then asks
+ * GitHub's public API for the numbers as they are now, once per page for
+ * everything that needs them, kept for ten minutes.
+ *
+ * GitHub allows a visitor 60 unsigned requests an hour. When it refuses, or
+ * the visitor is offline, the saved copy stays on screen. Only if that is
+ * missing too do callers get "unavailable" and fall back to the fixed links
+ * to the latest files.
  */
 
 export type PlatformId = "windows" | "macos" | "android";
@@ -65,22 +70,11 @@ async function ask(url: string) {
   return response.json();
 }
 
-async function load(): Promise<Project> {
-  try {
-    const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? "null");
-    if (cached && Date.now() - cached.at < CACHE_MS) return cached.project;
-  } catch {
-    // No storage, or nothing usable in it: ask GitHub.
-  }
-
-  const [repo, list] = await Promise.all([
-    ask(REPO_API_URL),
-    ask(`${REPO_API_URL}/releases?per_page=100`),
-  ]);
-
+/** GitHub's answers, as the site uses them. */
+function toProject(repo: { stargazers_count: number }, list: ApiRelease[]) {
   const project: Project = {
     stars: repo.stargazers_count,
-    releases: (list as ApiRelease[])
+    releases: list
       .filter((release) => !release.draft)
       .map((release) => ({
         tag: release.tag_name,
@@ -96,6 +90,34 @@ async function load(): Promise<Project> {
         })),
       })),
   };
+  return project;
+}
+
+// Files in public/ are not given the site's sub-folder by Next.js.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+/** The copy saved when the site was built. */
+async function loadSaved(): Promise<Project> {
+  const response = await fetch(`${BASE}/project.json`);
+  if (!response.ok) throw new Error("No saved copy");
+  const saved = await response.json();
+  return toProject(saved.repo, saved.releases);
+}
+
+/** The numbers as they are now, from GitHub. */
+async function loadLive(): Promise<Project> {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? "null");
+    if (cached && Date.now() - cached.at < CACHE_MS) return cached.project;
+  } catch {
+    // No storage, or nothing usable in it: ask GitHub.
+  }
+
+  const [repo, list] = await Promise.all([
+    ask(REPO_API_URL),
+    ask(`${REPO_API_URL}/releases?per_page=100`),
+  ]);
+  const project = toProject(repo, list as ApiRelease[]);
 
   try {
     sessionStorage.setItem(
@@ -108,23 +130,42 @@ async function load(): Promise<Project> {
   return project;
 }
 
-// Shared by every component on the page, so GitHub is asked once.
-let pending: Promise<Project> | null = null;
+// Shared by every component on the page, so each source is asked once.
+let saved: Promise<Project> | null = null;
+let live: Promise<Project> | null = null;
 
-/** The project, null while it loads, or "unavailable" if GitHub said no. */
+/**
+ * The project: null while nothing has arrived, then the saved copy, then
+ * GitHub's fresh answer if it gives one. "unavailable" only when neither
+ * could be read.
+ */
 export function useProject(): Project | null | "unavailable" {
   const [project, setProject] = useState<Project | null | "unavailable">(null);
 
   useEffect(() => {
     let cancelled = false;
-    pending ??= load();
-    pending.then(
+    let fresh = false;
+    saved ??= loadSaved();
+    live ??= loadLive();
+
+    saved.then(
       (result) => {
+        // Never put the older copy over a fresh answer.
+        if (!cancelled && !fresh) setProject(result);
+      },
+      () => {},
+    );
+    live.then(
+      (result) => {
+        fresh = true;
         if (!cancelled) setProject(result);
       },
       () => {
-        pending = null;
-        if (!cancelled) setProject("unavailable");
+        live = null;
+        // GitHub said no. Keep the saved copy if there is one.
+        saved!.catch(() => {
+          if (!cancelled) setProject("unavailable");
+        });
       },
     );
     return () => {
