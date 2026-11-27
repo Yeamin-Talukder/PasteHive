@@ -26,6 +26,8 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Opening the app counts as coming to the front too.
+    didChangeAppLifecycleState(AppLifecycleState.resumed);
   }
 
   @override
@@ -36,7 +38,16 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) widget.shell.captureNow();
+    if (state != AppLifecycleState.resumed) return;
+    // Android hands over the clipboard only once the app's window has the
+    // user's attention, which is a moment after it reports being resumed.
+    // Asking again a little later costs nothing: the same text is not
+    // recorded twice.
+    for (final delay in const [250, 900]) {
+      Future<void>.delayed(Duration(milliseconds: delay), () {
+        if (mounted) widget.shell.captureNow();
+      });
+    }
   }
 
   @override

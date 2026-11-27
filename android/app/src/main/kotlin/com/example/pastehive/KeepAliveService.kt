@@ -55,6 +55,12 @@ class KeepAliveService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val send = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -63,7 +69,10 @@ class KeepAliveService : Service() {
         }
         return builder
             .setContentTitle("Clipboard sync is on")
-            .setContentText("Text copied on your other devices arrives here.")
+            .setContentText("Tap Send clipboard after copying on this phone.")
+            .addAction(
+                Notification.Action.Builder(null, "Send clipboard", send).build(),
+            )
             .setSmallIcon(applicationInfo.icon)
             .setContentIntent(open)
             .setOngoing(true)

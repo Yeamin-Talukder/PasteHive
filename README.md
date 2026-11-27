@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="PasteHive: clipboard history and sync for Windows, macOS and Android" width="100%">
+  <img src="docs/banner.png" alt="PasteHive: clipboard history and sync for Windows, macOS and Android, with iOS coming soon" width="100%">
 </p>
 
 <h1 align="center">PasteHive: clipboard manager and clipboard sync</h1>
@@ -8,6 +8,15 @@
   A free, open-source clipboard manager for <b>Windows</b>, <b>macOS</b> and <b>Android</b>.<br>
   It keeps a searchable history of everything you copy and syncs your clipboard between your own devices
   over the local network, encrypted, with no cloud and no account.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Windows" src="https://img.shields.io/badge/Download-Windows-111111?style=for-the-badge"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for macOS" src="https://img.shields.io/badge/Download-macOS-111111?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Android" src="https://img.shields.io/badge/Download-Android-111111?style=for-the-badge&logo=android&logoColor=white"></a>
+  <img alt="PasteHive for iOS is coming soon" src="https://img.shields.io/badge/iOS-coming%20soon-555555?style=for-the-badge&logo=apple&logoColor=white">
+  <br>
+  <sub>The buttons open the <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest">latest release</a>. No release is published yet; until one is, <a href="#build-from-source">build from source</a>.</sub>
 </p>
 
 <p align="center">
@@ -98,6 +107,7 @@ other on your Wi-Fi or wired network and talk directly, encrypted.
 | Windows | Background panel, history, paste into the previous app, sync | The most used and tested build |
 | macOS | Background panel, history, paste (needs the Accessibility permission), sync | Release builds pass the app's self-checks; less tested on real hardware |
 | Android | Full-screen history, filters, preview, sync | Early. See the limits below |
+| iOS | Not available yet | Planned |
 
 Android does not let an app watch the clipboard in the background. On a phone
 PasteHive reads the clipboard each time it comes to the front, and also takes
@@ -107,8 +117,15 @@ yet be put on the phone's clipboard.
 
 ## Download
 
-There is no packaged release yet. When there is one, installers will be on the
-[Releases page](https://github.com/Yeamin-Talukder/PasteHive/releases),
+| Platform | Get it | File |
+| --- | --- | --- |
+| Windows | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | Installer or zip |
+| macOS | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | App bundle |
+| Android | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | APK |
+| iOS | Coming soon | |
+
+There is no packaged release yet, so the links above have nothing to offer
+for now. When the first release is published its files will be listed there,
 and the download badge at the top of this page will start counting. Until then,
 [build it from source](#build-from-source); it takes one command per platform.
 

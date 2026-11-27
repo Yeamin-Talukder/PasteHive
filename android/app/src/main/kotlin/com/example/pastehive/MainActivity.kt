@@ -17,7 +17,15 @@ import io.flutter.plugin.common.MethodChannel
  * other apps.
  */
 class MainActivity : FlutterActivity() {
-    private var channel: MethodChannel? = null
+    companion object {
+        /**
+         * The line to the Dart side while the app is alive, for the capture
+         * activity to pass on what it read; null when the app is not running.
+         */
+        @Volatile
+        var channel: MethodChannel? = null
+            private set
+    }
 
     /** Text shared to the app before the Dart side was ready to take it. */
     private var pendingText: String? = null
@@ -70,6 +78,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        channel = null
         releaseMulticastLock()
         super.onDestroy()
     }

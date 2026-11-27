@@ -54,6 +54,28 @@
             </intent-filter>
         </activity>
 
+        <!-- Invisible; opened for an instant to read the clipboard, which
+             Android only allows from a window the user is looking at. -->
+        <activity
+            android:name=".CaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
+
+        <!-- The quick-settings tile that does the same in one tap. -->
+        <service
+            android:name=".ClipboardTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Send clipboard"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
+
         <service
             android:name=".KeepAliveService"
             android:exported="false"
