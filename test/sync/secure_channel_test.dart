@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/sync/byte_connection.dart';
-import 'package:synchronize_clipboard/src/sync/secure_channel.dart';
-import 'package:synchronize_clipboard/src/sync/sync_key.dart';
+import 'package:pastehive/src/sync/byte_connection.dart';
+import 'package:pastehive/src/sync/secure_channel.dart';
+import 'package:pastehive/src/sync/sync_key.dart';
 
 import 'memory_network.dart';
 

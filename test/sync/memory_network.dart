@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:synchronize_clipboard/src/sync/byte_connection.dart';
-import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
+import 'package:pastehive/src/sync/byte_connection.dart';
+import 'package:pastehive/src/sync/sync_ports.dart';
 
 /// A pretend local network: devices on it can announce themselves and
 /// connect to each other without any real sockets.

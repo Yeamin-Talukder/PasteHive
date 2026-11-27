@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
-import 'package:synchronize_clipboard/src/sync/sync_service.dart';
+import 'package:pastehive/src/sync/sync_ports.dart';
+import 'package:pastehive/src/sync/sync_service.dart';
 
 import 'memory_network.dart';
 

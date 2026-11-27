@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/platform/native_ports.dart';
+import 'package:pastehive/src/platform/native_ports.dart';
 
 void main() {
   final bytes = [for (var i = 0; i < 200; i++) (i * 7) % 256];

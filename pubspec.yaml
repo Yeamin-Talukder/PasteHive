@@ -1,4 +1,4 @@
-name: synchronize_clipboard
+name: pastehive
 description: "Keeps the clipboard in sync across your devices."
 publish_to: 'none'
 

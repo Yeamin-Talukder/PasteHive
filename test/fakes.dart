@@ -1,9 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/painting.dart' show EdgeInsets;
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/history/history_store.dart';
-import 'package:synchronize_clipboard/src/platform/ports.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/history/history_store.dart';
+import 'package:pastehive/src/platform/ports.dart';
 
 /// A 1440x900 screen with a 25 px menu bar, like a MacBook.
 const laptop = DisplayGeometry(

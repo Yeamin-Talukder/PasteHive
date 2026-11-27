@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
-import 'package:synchronize_clipboard/src/ui/panel_scene.dart';
+import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/shell/panel_controller.dart';
+import 'package:pastehive/src/ui/panel_scene.dart';
 
 import '../fakes.dart';
 

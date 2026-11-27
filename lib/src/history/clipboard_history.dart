@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 import 'clipboard_entry.dart';
 import 'history_store.dart';
@@ -57,6 +58,33 @@ class ClipboardHistory extends ChangeNotifier {
   Future<void> load() async {
     _entries = _sorted(await _store.load());
     notifyListeners();
+  }
+
+  /// Points every picture entry at the file of the same name in [folder].
+  /// For when the folder the pictures are kept in has moved.
+  void relocateImages(String folder) {
+    var changed = false;
+    final next = [
+      for (final entry in _entries)
+        if (entry.imagePath == null ||
+            path.equals(path.dirname(entry.imagePath!), folder))
+          entry
+        else
+          () {
+            changed = true;
+            return ClipboardEntry(
+              id: entry.id,
+              text: entry.text,
+              copiedAt: entry.copiedAt,
+              pinned: entry.pinned,
+              source: entry.source,
+              imagePath: path.join(folder, path.basename(entry.imagePath!)),
+              imageWidth: entry.imageWidth,
+              imageHeight: entry.imageHeight,
+            );
+          }(),
+    ];
+    if (changed) _commit(next);
   }
 
   /// Records [text] as just copied, on the device named [source] or, when

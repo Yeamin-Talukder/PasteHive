@@ -1,4 +1,4 @@
-package com.example.synchronize_clipboard
+package com.example.pastehive
 
 import android.app.Notification
 import android.app.NotificationChannel

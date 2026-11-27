@@ -10,6 +10,7 @@ import 'src/app_shell.dart';
 import 'src/diagnostics/smoke_run.dart';
 import 'src/history/clipboard_history.dart';
 import 'src/history/history_store.dart';
+import 'src/legacy_data.dart';
 import 'src/mobile/mobile_main.dart';
 import 'src/history/image_vault.dart';
 import 'src/platform/native_ports.dart';
@@ -55,7 +56,11 @@ Future<void> main() async {
         File(path.join(supportDirectory.path, 'history.json')),
       ),
     );
+    // The app used to keep its data under another name.
+    await adoptDataFromFormerName(supportDirectory);
     await history.load();
+    // Pictures are remembered by full path; point them at this folder.
+    history.relocateImages(images.directory.path);
   }
 
   final window = NativePanelWindow();

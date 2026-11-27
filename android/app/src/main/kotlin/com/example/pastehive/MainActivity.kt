@@ -1,4 +1,4 @@
-package com.example.synchronize_clipboard
+package com.example.pastehive
 
 import android.Manifest
 import android.content.Context
@@ -29,7 +29,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "synchronize_clipboard/phone",
+            "pastehive/phone",
         ).also {
             it.setMethodCallHandler { call, result ->
                 when (call.method) {
