@@ -1,0 +1,203 @@
+# The steps that analyze, test and build the app for every platform.
+#
+# Nothing starts this file directly. "Build and test" (ci.yml) runs it for
+# every push and pull request, and "Release" (release.yml) runs it for a
+# version tag and then publishes what it built. Because both use the same
+# steps, a build that passes here is the build a release ships.
+#
+# What it produces, under fixed names so download links never change:
+#   PasteHive-windows-x64.zip   the app folder, with the Visual C++ runtime
+#   PasteHive-macos.zip         the app bundle (not notarized)
+#   PasteHive-android.apk       one APK for all phone architectures
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      build-name:
+        description: Version shown in the app, such as 1.2.0. Empty uses pubspec.yaml.
+        type: string
+        default: ""
+      build-number:
+        description: Build number. On Android it must grow with every release.
+        type: string
+        default: ""
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+    outputs:
+      android-signing:
+        description: '"release" when the APK was signed with your own key, "debug" otherwise.'
+        value: ${{ jobs.android.outputs.signing }}
+
+env:
+  # The Flutter version the app is developed with. Raise it here when you
+  # upgrade Flutter on your own machine.
+  FLUTTER_VERSION: "3.47.2"
+  BUILD_NAME: ${{ inputs.build-name }}
+  BUILD_NUMBER: ${{ inputs.build-number }}
+
+jobs:
+  test:
+    name: Analyze and test
+    # Windows, not Linux: the tests load the native core (cnativeapi), which
+    # is compiled on the spot and needs the toolchain of a desktop the app
+    # supports.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+
+      - name: Build
+        shell: bash
+        run: |
+          args=()
+          [ -n "$BUILD_NAME" ] && args+=("--build-name=$BUILD_NAME")
+          [ -n "$BUILD_NUMBER" ] && args+=("--build-number=$BUILD_NUMBER")
+          flutter build windows --release "${args[@]}"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          # A PC without Visual Studio may lack these three files, and the
+          # app does not start without them. Microsoft allows shipping them.
+          foreach ($dll in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
+            Copy-Item "$env:SystemRoot\System32\$dll" $release
+          }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item $release "dist\PasteHive" -Recurse
+          Compress-Archive -Path "dist\PasteHive" -DestinationPath "PasteHive-windows-x64.zip"
+          Get-ChildItem "dist\PasteHive" | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: PasteHive-windows-x64.zip
+          if-no-files-found: error
+
+  macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+
+      - name: Build
+        run: |
+          args=()
+          [ -n "$BUILD_NAME" ] && args+=("--build-name=$BUILD_NAME")
+          [ -n "$BUILD_NUMBER" ] && args+=("--build-number=$BUILD_NUMBER")
+          flutter build macos --release "${args[@]}"
+
+      - name: Package
+        run: |
+          app=$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)
+          echo "Packaging $app"
+          # ditto keeps the bundle's signature and symlinks intact; zip does not.
+          ditto -c -k --sequesterRsrc --keepParent "$app" PasteHive-macos.zip
+          ls -lh PasteHive-macos.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: PasteHive-macos.zip
+          if-no-files-found: error
+
+  android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    outputs:
+      signing: ${{ steps.sign.outputs.signing }}
+    env:
+      # Optional. See "Android signing" at the top of release.yml.
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+
+      - name: Build
+        run: |
+          args=()
+          [ -n "$BUILD_NAME" ] && args+=("--build-name=$BUILD_NAME")
+          [ -n "$BUILD_NUMBER" ] && args+=("--build-number=$BUILD_NUMBER")
+          flutter build apk --release "${args[@]}"
+
+      - name: Sign
+        id: sign
+        run: |
+          built=build/app/outputs/flutter-apk/app-release.apk
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            # The project signs release builds with the debug key, and every
+            # build machine makes its own. Fine for trying the app; not for
+            # updates, because Android refuses to install over a different key.
+            cp "$built" PasteHive-android.apk
+            echo "signing=debug" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Android APK is signed with a throwaway debug key::It cannot be installed over an earlier release. Add the ANDROID_KEYSTORE secrets described in release.yml to sign with your own key."
+            exit 0
+          fi
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          keystore="$RUNNER_TEMP/release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          export KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+          "$tools/apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --out PasteHive-android.apk "$built"
+          rm -f "$keystore"
+          "$tools/apksigner" verify --print-certs PasteHive-android.apk | head -n 2
+          echo "signing=release" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: PasteHive-android.apk
+          if-no-files-found: error

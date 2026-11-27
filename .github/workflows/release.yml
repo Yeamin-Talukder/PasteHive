@@ -1,0 +1,131 @@
+# Publishes a release when a version tag is pushed.
+#
+# To release version 1.2.0:
+#
+#   git tag v1.2.0
+#   git push origin v1.2.0
+#
+# The tag is the version: the app is built as 1.2.0 whatever pubspec.yaml
+# says. A tag with a suffix, such as v1.2.0-beta.1, is published as a
+# pre-release. The run analyzes and tests first; if anything fails, nothing
+# is published.
+#
+# The release gets three files with fixed names, so these links always point
+# at the newest one:
+#   .../releases/latest/download/PasteHive-windows-x64.zip
+#   .../releases/latest/download/PasteHive-macos.zip
+#   .../releases/latest/download/PasteHive-android.apk
+#
+# What these builds are not:
+#   - Windows: not code-signed. SmartScreen warns the first time it is run.
+#   - macOS: not notarized. macOS blocks it until the user allows it in
+#     System Settings > Privacy & Security. Notarizing needs a paid Apple
+#     Developer account and is not set up here.
+#
+# Android signing
+#   Without the secrets below, the APK is signed with a debug key that the
+#   build machine makes up on the spot. Each release then has a different
+#   key and cannot be installed over the previous one. To sign every release
+#   with one key of your own, create a keystore once:
+#
+#     keytool -genkeypair -v -keystore pastehive.jks -alias pastehive -keyalg RSA -keysize 2048 -validity 10000
+#
+#   keep it somewhere safe (losing it means users must reinstall), and add
+#   these under Settings > Secrets and variables > Actions:
+#     ANDROID_KEYSTORE_BASE64     the file, base64-encoded
+#     ANDROID_KEYSTORE_PASSWORD   its password
+#     ANDROID_KEY_ALIAS           the alias, "pastehive" above
+#     ANDROID_KEY_PASSWORD        only if the key's password differs
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Read the version from the tag
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.read.outputs.full }}
+      numeric: ${{ steps.read.outputs.numeric }}
+      prerelease: ${{ steps.read.outputs.prerelease }}
+    steps:
+      - id: read
+        run: |
+          full="${GITHUB_REF_NAME#v}"
+          numeric="${full%%-*}"
+          if ! [[ "$numeric" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a version. Use a tag like v1.2.0 or v1.2.0-beta.1."
+            exit 1
+          fi
+          prerelease=false
+          if [ "$full" != "$numeric" ]; then prerelease=true; fi
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "numeric=$numeric" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      build-name: ${{ needs.version.outputs.numeric }}
+      # Grows by one with every release run, as Android requires.
+      build-number: ${{ github.run_number }}
+    secrets: inherit
+
+  publish:
+    name: Publish the release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum PasteHive-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write the notes
+        env:
+          ANDROID_SIGNING: ${{ needs.build.outputs.android-signing }}
+        run: |
+          {
+            echo "## Install"
+            echo
+            echo "- **Windows**: unzip \`PasteHive-windows-x64.zip\` and run \`pastehive.exe\` in the \`PasteHive\` folder. The app is not code-signed, so SmartScreen may warn the first time: choose **More info**, then **Run anyway**."
+            echo "- **macOS**: unzip \`PasteHive-macos.zip\` and move the app to Applications. It is not notarized, so macOS blocks it at first: open **System Settings > Privacy & Security** and choose **Open Anyway**. Pasting needs the Accessibility permission."
+            echo "- **Android**: open \`PasteHive-android.apk\` on the phone and allow the install."
+            if [ "$ANDROID_SIGNING" != "release" ]; then
+              echo "  This APK is signed with a one-off key. If an earlier version is installed, uninstall it first."
+            fi
+            echo
+            echo "\`SHA256SUMS.txt\` lists the checksum of each file."
+            echo
+          } > notes.md
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.full }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "PasteHive $VERSION" \
+            --notes-file notes.md \
+            --generate-notes \
+            "${flags[@]}"
