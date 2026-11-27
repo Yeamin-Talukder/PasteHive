@@ -29,6 +29,11 @@ class PhoneBridge {
       if (call.method == 'sharedText') {
         final text = call.arguments;
         if (text is String) onSharedText?.call(text);
+      } else if (call.method == 'sharedFiles') {
+        final paths = call.arguments;
+        if (paths is List) {
+          onSharedFiles?.call(paths.whereType<String>().toList());
+        }
       } else if (call.method == 'capture') {
         // Answered only once the clipboard has been read: the Android
         // side is holding a window in front for exactly that long.
@@ -41,6 +46,10 @@ class PhoneBridge {
 
   /// Called with text another app shared to this one while it was running.
   void Function(String text)? onSharedText;
+
+  /// Called with the files another app shared to this one while it was
+  /// running, already copied into the app's own folder.
+  void Function(List<String> paths)? onSharedFiles;
 
   /// Called when a copy was noticed, or sending was asked for by hand: the
   /// clipboard can be read right now, and should be.
@@ -83,6 +92,24 @@ class PhoneBridge {
   /// The text on the phone's clipboard; null when the system will not show
   /// it, as when the app is not in front.
   Future<String?> readClipboard() => _invoke<String>('readClipboard');
+
+  /// The sets of files shared to the app before it was ready for them.
+  Future<List<List<String>>> takeSharedFiles() async {
+    final sets = await _invoke<List<Object?>>('takeSharedFiles');
+    return [
+      for (final set in sets ?? const <Object?>[])
+        if (set is List) set.whereType<String>().toList(),
+    ];
+  }
+
+  /// Puts the stored files at [paths] on the phone's clipboard.
+  Future<bool> writeClipboardFiles(List<String> paths) async =>
+      await _invoke<bool>('writeClipboardFiles', paths) ?? false;
+
+  /// Opens the stored file at [paths] in whichever app handles it, or
+  /// offers several to be sent or saved together.
+  Future<bool> openFiles(List<String> paths) async =>
+      await _invoke<bool>('openFiles', paths) ?? false;
 
   /// The picture on the phone's clipboard, if there is one and the system
   /// will show it.
@@ -167,10 +194,14 @@ class PhoneClipboard implements ClipboardPort {
     return true;
   }
 
-  // Files copied on a computer are listed but mean nothing on a phone.
+  // Files received from another device are kept in the app's own folder
+  // and offered to whichever app pastes them.
 
   @override
-  bool writeFiles(List<String> paths) => false;
+  bool writeFiles(List<String> paths) {
+    unawaited(bridge.writeClipboardFiles(paths));
+    return true;
+  }
 }
 
 /// Android: the release is an APK, handed to the system's installer. The

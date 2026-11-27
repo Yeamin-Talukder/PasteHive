@@ -120,8 +120,9 @@ class ClipboardHistory extends ChangeNotifier {
     );
   }
 
-  /// Records copied files and folders, by their full paths.
-  bool recordFiles(List<String> paths) {
+  /// Records copied files and folders, by their full paths. [source] names
+  /// the device they were copied on when it was not this one.
+  bool recordFiles(List<String> paths, {String? source}) {
     if (paths.isEmpty) return false;
     return _record(
       (id, now) => ClipboardEntry(
@@ -129,7 +130,9 @@ class ClipboardHistory extends ChangeNotifier {
         text: paths.join('\n'),
         copiedAt: now,
         files: List.unmodifiable(paths),
+        source: source,
       ),
+      source: source,
     );
   }
 

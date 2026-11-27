@@ -49,6 +49,15 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="text/plain"/>
             </intent-filter>
+            <!-- A file, or several, shared from another app (a PDF from the
+                 file manager, a photo from the gallery): they are sent to
+                 the other devices as files. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
             <!-- The same from the menu that appears over selected text. -->
             <intent-filter android:label="PasteHive">
                 <action android:name="android.intent.action.PROCESS_TEXT"/>

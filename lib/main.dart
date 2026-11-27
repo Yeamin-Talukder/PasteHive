@@ -12,6 +12,7 @@ import 'src/history/clipboard_history.dart';
 import 'src/history/history_store.dart';
 import 'src/legacy_data.dart';
 import 'src/mobile/mobile_main.dart';
+import 'src/history/file_vault.dart';
 import 'src/history/image_vault.dart';
 import 'src/platform/native_ports.dart';
 import 'src/shell/panel_controller.dart';
@@ -88,6 +89,10 @@ Future<void> main() async {
     tray: NativeTray(),
     onQuit: () async => exit(0),
     images: images,
+    // A self-check neither sends nor keeps files.
+    receivedFiles: checking
+        ? null
+        : FileVault(Directory(path.join(supportDirectory.path, 'files'))),
     captureAtLaunch: !checking,
   );
   shell.trace = trace;

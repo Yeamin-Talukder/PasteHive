@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 
 import 'history/clipboard_entry.dart';
 import 'history/clipboard_history.dart';
+import 'history/file_vault.dart';
 import 'history/image_vault.dart';
 import 'platform/ports.dart';
 import 'shell/panel_controller.dart';
@@ -27,6 +28,7 @@ class AppShell {
     required this._tray,
     required this._onQuit,
     this.images,
+    this.receivedFiles,
     this.captureAtLaunch = true,
     this.readRetryDelay = const Duration(milliseconds: 60),
     DateTime Function()? clock,
@@ -48,6 +50,15 @@ class AppShell {
 
   /// Where copied pictures are kept. Without it pictures are not recorded.
   final ImageVault? images;
+
+  /// Where files received from other devices are kept. Without it files
+  /// are neither sent nor received.
+  final FileVault? receivedFiles;
+
+  /// Called after the user picks an entry from the list, once it is on the
+  /// clipboard. A phone uses it to open a picked file, which is what one
+  /// wants there far more often than pasting it.
+  void Function(ClipboardEntry entry)? onPicked;
 
   /// Whether whatever is on the clipboard when the app starts goes into the
   /// list. Off for a self-check, which must not show real clipboard content.
@@ -77,6 +88,14 @@ class AppShell {
   /// back and forth between two devices for ever.
   String? _sharedText;
 
+  /// The same for files: the set last sent or received, by full path.
+  List<String> _sharedFiles = const [];
+
+  /// Sets of files that are arriving, by transfer; and the work of writing
+  /// them, chained so the pieces land in the order they came.
+  final Map<String, ({IncomingFiles files, String fromName})> _arriving = {};
+  Future<void> _lastFileWrite = Future.value();
+
   /// The same for pictures: the file name of the one last sent or received.
   /// Pictures are named after their contents, so it is the same everywhere.
   String? _sharedImage;
@@ -91,13 +110,17 @@ class AppShell {
   Future<void> get captured async {
     Future<void> capture;
     Future<void> share;
+    Future<void> write;
     do {
       capture = _lastCapture;
       share = _lastShare;
+      write = _lastFileWrite;
       await capture;
       await share;
+      await write;
     } while (!identical(capture, _lastCapture) ||
-        !identical(share, _lastShare));
+        !identical(share, _lastShare) ||
+        !identical(write, _lastFileWrite));
   }
 
   /// Called with each step of [start] as it begins; for tracing a launch
@@ -151,6 +174,7 @@ class AppShell {
         }),
       )
       ..add(sync.remoteClears.listen((_) => history.clearRemote()))
+      ..add(sync.remoteFiles.listen(_onRemoteFiles))
       ..add(
         sync.remoteHistory.listen(
           (entry) => history.mergeRemote(
@@ -210,7 +234,8 @@ class AppShell {
         );
       case EntryKind.files:
         _clipboard.writeFiles(entry.files);
-        history.recordFiles(entry.files);
+        history.recordFiles(entry.files, source: entry.source);
+        _queueFilesShare(entry.files);
       case EntryKind.text ||
           EntryKind.link ||
           EntryKind.email ||
@@ -221,6 +246,15 @@ class AppShell {
     }
     panel.dismiss();
     if (panel.canPaste) unawaited(panel.pasteIntoPreviousWindow());
+    onPicked?.call(entry);
+  }
+
+  /// Records [paths] as files copied on this device and sends them to the
+  /// others. For files handed to the app some other way than the clipboard,
+  /// as a phone's Share does.
+  void addCopiedFiles(List<String> paths) {
+    if (paths.isEmpty) return;
+    if (history.recordFiles(paths)) _queueFilesShare(paths);
   }
 
   /// Sends this device's text history to the device [to], or to every
@@ -294,11 +328,15 @@ class AppShell {
   // would be maddening, so the settings and About views pin the panel open.
   void _onPageChanged() => panel.holdOpen = page.value != PanelPage.history;
 
-  /// Deletes stored pictures that no entry refers to any more.
+  /// Deletes stored pictures, and files received from other devices, that
+  /// no entry refers to any more.
   Future<void> removeUnusedImages() async {
     await images?.removeAllExcept([
       for (final entry in history.entries)
         if (entry.imagePath != null) entry.imagePath!,
+    ]);
+    await receivedFiles?.removeAllExcept([
+      for (final entry in history.entries) ...entry.files,
     ]);
   }
 
@@ -334,7 +372,10 @@ class AppShell {
   Future<void> _read() async {
     final files = await _clipboard.readFiles();
     if (files.isNotEmpty) {
-      history.recordFiles(files);
+      // Files this app put there itself, having received them, are already
+      // in the list under the device they came from.
+      if (_sameFiles(files, _sharedFiles) && _allReceived(files)) return;
+      if (history.recordFiles(files)) _queueFilesShare(files);
       return;
     }
     final text = await _clipboard.readText();
@@ -360,6 +401,87 @@ class AppShell {
         width: image.width,
         height: image.height,
       );
+    }
+  }
+
+  static bool _sameFiles(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!path.equals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  bool _allReceived(List<String> files) {
+    final vault = receivedFiles;
+    return vault != null && files.every(vault.holds);
+  }
+
+  void _queueFilesShare(List<String> files) {
+    _lastShare = _lastShare.then((_) => _shareFiles(files));
+  }
+
+  // Sends copied files to the other devices. Folders are left out: only
+  // files are sent, and a copy that is nothing but folders sends nothing.
+  Future<void> _shareFiles(List<String> files) async {
+    if (receivedFiles == null || history.paused) return;
+    // The same set twice in a row is not sent twice, which is also what
+    // keeps one from bouncing between two devices.
+    if (_sameFiles(files, _sharedFiles)) return;
+    final outgoing = <OutgoingFile>[];
+    try {
+      for (final file in files) {
+        if (await FileSystemEntity.isFile(file)) {
+          outgoing.add((name: path.basename(file), file: File(file)));
+        }
+      }
+      if (outgoing.isEmpty) return;
+      _sharedFiles = files;
+      _sharedText = null;
+      _sharedImage = null;
+      if (!await sync.sendFiles(outgoing)) {
+        debugPrint('Files were too large to send to the other devices.');
+      }
+    } on FileSystemException catch (error) {
+      debugPrint('Could not read a file to send it: $error');
+    }
+  }
+
+  // Files arrive in pieces; each step waits for the one before it.
+  void _onRemoteFiles(RemoteFileEvent event) {
+    _lastFileWrite = _lastFileWrite.then((_) => _applyRemoteFiles(event));
+  }
+
+  Future<void> _applyRemoteFiles(RemoteFileEvent event) async {
+    final vault = receivedFiles;
+    if (vault == null) return;
+    try {
+      switch (event) {
+        case RemoteFilesBegin():
+          // Paused means paused in both directions.
+          if (history.paused) return;
+          _arriving[event.transferId] = (
+            files: await vault.begin(event.transferId, event.names),
+            fromName: event.fromName,
+          );
+        case RemoteFilesChunk():
+          _arriving[event.transferId]?.files.add(event.index, event.bytes);
+        case RemoteFilesAborted():
+          await _arriving.remove(event.transferId)?.files.abandon();
+        case RemoteFilesEnd():
+          final arrived = _arriving.remove(event.transferId);
+          if (arrived == null) return;
+          final paths = await arrived.files.finish();
+          _sharedFiles = paths;
+          _sharedText = null;
+          _sharedImage = null;
+          // The clipboard will report this write; it is not a new copy.
+          _clipboard.writeFiles(paths);
+          history.recordFiles(paths, source: arrived.fromName);
+      }
+    } on FileSystemException catch (error) {
+      debugPrint('Could not keep a file from another device: $error');
+      await _arriving.remove(event.transferId)?.files.abandon();
     }
   }
 
@@ -401,6 +523,7 @@ class AppShell {
     if (history.paused || name == _sharedImage) return;
     _sharedImage = name;
     _sharedText = null;
+    _sharedFiles = const [];
     if (!sync.sendImage(png, width: width, height: height)) {
       debugPrint('A picture was too large to send to the other devices.');
     }
@@ -415,6 +538,7 @@ class AppShell {
     if (name == _sharedImage) return;
     _sharedImage = name;
     _sharedText = null;
+    _sharedFiles = const [];
     // The clipboard will report this write; it is not a new copy.
     _ownImageUntil = _clock().add(const Duration(seconds: 2));
     _clipboard.writeImage(stored);
@@ -430,6 +554,7 @@ class AppShell {
     if (history.paused || text == _sharedText) return;
     _sharedText = text;
     _sharedImage = null;
+    _sharedFiles = const [];
     sync.sendClip(text);
   }
 
@@ -438,6 +563,7 @@ class AppShell {
     if (history.paused || clip.text == _sharedText) return;
     _sharedText = clip.text;
     _sharedImage = null;
+    _sharedFiles = const [];
     _clipboard.writeText(clip.text);
     history.record(clip.text, source: clip.fromName);
   }

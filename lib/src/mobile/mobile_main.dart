@@ -6,8 +6,10 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../app_shell.dart';
+import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
 import '../history/history_store.dart';
+import '../history/file_vault.dart';
 import '../history/image_vault.dart';
 import '../shell/panel_controller.dart';
 import '../sync/network.dart';
@@ -53,6 +55,9 @@ Future<void> runPhoneApp() async {
     tray: const NoTray(),
     onQuit: () async {},
     images: ImageVault(Directory(path.join(supportDirectory.path, 'images'))),
+    receivedFiles: FileVault(
+      Directory(path.join(supportDirectory.path, 'files')),
+    ),
   );
   unawaited(shell.removeUnusedImages());
 
@@ -70,6 +75,13 @@ Future<void> runPhoneApp() async {
   // treated as copied: the system does not let the app see a copy made in
   // another app while it is in the background, so this is the way in.
   bridge.onSharedText = shell.addCopied;
+  // Files handed over with Share go to the other devices as files.
+  bridge.onSharedFiles = shell.addCopiedFiles;
+  // Tapping a file in the list opens it: on a phone that is what one wants
+  // from a PDF, far more often than pasting it.
+  shell.onPicked = (entry) {
+    if (entry.kind == EntryKind.files) unawaited(bridge.openFiles(entry.files));
+  };
   // A copy was noticed in another app (or Send clipboard was pressed):
   // for this moment the clipboard can be read, text or picture.
   bridge.onCapture = () async {
@@ -88,4 +100,5 @@ Future<void> runPhoneApp() async {
   unawaited(shell.updates?.start());
 
   (await bridge.takeSharedTexts()).forEach(shell.addCopied);
+  (await bridge.takeSharedFiles()).forEach(shell.addCopiedFiles);
 }

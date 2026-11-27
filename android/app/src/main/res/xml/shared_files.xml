@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The only folders a file may be handed out from: downloaded updates,
-     and the pictures in the clipboard history. -->
+     and the pictures and files in the clipboard history. -->
 <paths>
     <cache-path name="updates" path="updates/"/>
     <files-path name="images" path="images/"/>
+    <files-path name="files" path="files/"/>
 </paths>

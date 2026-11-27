@@ -90,7 +90,8 @@ other on your Wi-Fi or wired network and talk directly, encrypted.
 
 **Clipboard sync**
 
-- Copy on one device, paste on another: text and pictures.
+- Copy on one device, paste on another: text, pictures and files (a PDF, a
+  document, a zip: any kind).
 - Pair devices by request and accept, checked with a six-digit code. There is
   no key to type and no account to create.
 - More than two devices can share one group: pair a new device with any
@@ -199,9 +200,16 @@ Things to know:
   needs both to be allowed.
 - Networks that keep devices apart (guest Wi-Fi, some office networks) will
   not work.
-- Text and pictures are synced. Pictures larger than 5 MB as PNG stay on the
-  device where they were copied. Files are never sent: a path means nothing on
-  another machine.
+- Text, pictures and files are synced. Pictures larger than 5 MB as PNG stay
+  on the device where they were copied.
+- Copied files are sent themselves, not their paths: up to 50 files and
+  100 MB in one copy. A received file is kept in the app's folder under its
+  own name and put on the clipboard, so it pastes into a folder or a
+  message like any copied file. Folders are not sent. A received file is
+  removed once its entry has left the history.
+- On Android, tapping a received file opens it, and a file is sent from the
+  phone with **Share**, choosing PasteHive. Deleting a file's entry on one
+  device does not delete it on the others.
 - A device that is off or away when something is deleted does not hear about
   it.
 
@@ -261,7 +269,7 @@ PasteHive server.
 No. Both devices have to be on the same local network.
 
 **Can I copy on Windows and paste on a Mac or an Android phone?**
-Yes, for text and pictures, once the devices are paired.
+Yes, for text, pictures and files, once the devices are paired.
 
 **Does it replace the Windows clipboard history (Win+V) or Apple's Universal Clipboard?**
 It works alongside them. PasteHive adds search, filters, pinning and sync

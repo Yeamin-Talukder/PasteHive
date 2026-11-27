@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -108,6 +109,52 @@ class RemoteImage {
   final String fromName;
 }
 
+/// A file to send to the other devices: what to call it there, and where
+/// its contents are here.
+typedef OutgoingFile = ({String name, File file});
+
+/// A step in the arrival of files copied on another device. Files come in
+/// pieces: first what is coming, then the pieces, then the end.
+sealed class RemoteFileEvent {
+  const RemoteFileEvent(this.transferId);
+
+  /// Tells one set of files from another; unique to the device it is from.
+  final String transferId;
+}
+
+/// Files are about to arrive, called [names] and [sizes] bytes long.
+class RemoteFilesBegin extends RemoteFileEvent {
+  const RemoteFilesBegin(
+    super.transferId, {
+    required this.names,
+    required this.sizes,
+    required this.fromName,
+  });
+
+  final List<String> names;
+  final List<int> sizes;
+  final String fromName;
+}
+
+/// The next [bytes] of file number [index].
+class RemoteFilesChunk extends RemoteFileEvent {
+  const RemoteFilesChunk(super.transferId, this.index, this.bytes);
+
+  final int index;
+  final Uint8List bytes;
+}
+
+/// Every file has arrived whole.
+class RemoteFilesEnd extends RemoteFileEvent {
+  const RemoteFilesEnd(super.transferId);
+}
+
+/// The files will not arrive: the connection broke, or what came did not
+/// match what was announced.
+class RemoteFilesAborted extends RemoteFileEvent {
+  const RemoteFilesAborted(super.transferId);
+}
+
 /// An entry of another device's history, sent so this one has it too.
 @immutable
 class RemoteHistoryEntry {
@@ -154,6 +201,9 @@ class SyncService extends ChangeNotifier {
     this.pairingTimeout = const Duration(seconds: 90),
     this.maxTextLength = 1000000,
     this.maxImageBytes = 5 * 1024 * 1024,
+    this.maxFilesBytes = 100 * 1024 * 1024,
+    this.maxFileCount = 50,
+    this.fileChunkBytes = 256 * 1024,
   }) : _random = random ?? Random.secure(),
        _clock = clock ?? _stopwatchClock();
 
@@ -187,12 +237,22 @@ class SyncService extends ChangeNotifier {
   /// accepted: one has to fit in a single message.
   final int maxImageBytes;
 
+  /// The most that one copy of files may add up to and still be sent.
+  final int maxFilesBytes;
+
+  /// The most files one copy may hold and still be sent.
+  final int maxFileCount;
+
+  /// How much of a file goes in one message.
+  final int fileChunkBytes;
+
   final _remoteClips = StreamController<RemoteClip>.broadcast();
   final _remoteDeletes = StreamController<String>.broadcast();
   final _remoteImages = StreamController<RemoteImage>.broadcast();
   final _remoteImageDeletes = StreamController<String>.broadcast();
   final _remoteClears = StreamController<void>.broadcast();
   final _remoteHistory = StreamController<RemoteHistoryEntry>.broadcast();
+  final _remoteFiles = StreamController<RemoteFileEvent>.broadcast();
 
   /// How many history entries go into one message.
   static const _historyBatch = 40;
@@ -278,6 +338,9 @@ class SyncService extends ChangeNotifier {
 
   /// Older entries another device is sharing.
   Stream<RemoteHistoryEntry> get remoteHistory => _remoteHistory.stream;
+
+  /// Files copied on other devices, piece by piece as they arrive.
+  Stream<RemoteFileEvent> get remoteFiles => _remoteFiles.stream;
 
   /// Whether a device that joins is sent the history already here.
   bool get shareHistory => _settings?.shareHistory ?? false;
@@ -440,6 +503,64 @@ class SyncService extends ChangeNotifier {
     return true;
   }
 
+  /// Sends [files] to every connected device, in pieces, so that a large
+  /// file is never held in memory whole. Returns false, sending nothing,
+  /// when there are too many or they are too large together.
+  ///
+  /// A device that connects part-way through does not get them.
+  Future<bool> sendFiles(List<OutgoingFile> files) async {
+    if (files.isEmpty || files.length > maxFileCount) return false;
+    final sizes = <int>[];
+    var total = 0;
+    for (final file in files) {
+      final size = await file.file.length();
+      sizes.add(size);
+      total += size;
+    }
+    if (total > maxFilesBytes) return false;
+    final sessions = _sessions.values.toList();
+    if (sessions.isEmpty) return true;
+
+    final id = _newDeviceId();
+    Future<void> send(Map<String, Object?> message) => Future.wait([
+      for (final session in sessions) session.channel.send(message),
+    ]);
+    try {
+      await send({
+        'type': 'files-begin',
+        'id': id,
+        'files': [
+          for (final (index, file) in files.indexed)
+            {'name': file.name, 'size': sizes[index]},
+        ],
+      });
+      for (final (index, file) in files.indexed) {
+        final reader = await file.file.open();
+        try {
+          while (true) {
+            final chunk = await reader.read(fileChunkBytes);
+            if (chunk.isEmpty) break;
+            await send({
+              'type': 'files-chunk',
+              'id': id,
+              'i': index,
+              'data': base64Encode(chunk),
+            });
+          }
+        } finally {
+          await reader.close();
+        }
+      }
+      await send({'type': 'files-end', 'id': id});
+      return true;
+    } on FileSystemException catch (error) {
+      // The file went away or cannot be read; the receivers drop the rest.
+      debugPrint('A file could not be sent: $error');
+      await send({'type': 'files-abort', 'id': id});
+      return false;
+    }
+  }
+
   /// Tells every connected device that the picture stored under [name] was
   /// deleted here. Pictures are named after their contents, so the name is
   /// the same on every device.
@@ -511,6 +632,7 @@ class SyncService extends ChangeNotifier {
     unawaited(_remoteImageDeletes.close());
     unawaited(_remoteClears.close());
     unawaited(_remoteHistory.close());
+    unawaited(_remoteFiles.close());
     super.dispose();
   }
 
@@ -749,6 +871,7 @@ class SyncService extends ChangeNotifier {
         debugPrint('Connection to ${channel.peerName} failed: $error');
       },
       onDone: () {
+        _abortIncoming(session);
         if (identical(_sessions[id], session)) {
           _sessions.remove(id);
           notifyListeners();
@@ -804,6 +927,27 @@ class SyncService extends ChangeNotifier {
         } on FormatException {
           // Not a picture after all; nothing to show.
         }
+      case 'files-begin':
+        _onFilesBegin(session, message);
+      case 'files-chunk':
+        _onFilesChunk(session, message);
+      case 'files-end' || 'files-abort':
+        final id = message['id'];
+        final incoming = session.incoming;
+        if (id is! String || incoming == null || incoming.id != id) break;
+        session.incoming = null;
+        final whole =
+            message['type'] == 'files-end' &&
+            incoming.received.indexed.every(
+              (pair) => pair.$2 == incoming.sizes[pair.$1],
+            );
+        if (!_remoteFiles.isClosed) {
+          _remoteFiles.add(
+            whole
+                ? RemoteFilesEnd(incoming.key)
+                : RemoteFilesAborted(incoming.key),
+          );
+        }
       case 'delete-image':
         final name = message['name'];
         if (name is String && !_remoteImageDeletes.isClosed) {
@@ -841,6 +985,87 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  void _onFilesBegin(_Session session, Map<String, Object?> message) {
+    final id = message['id'];
+    final listed = message['files'];
+    if (id is! String || id.isEmpty || id.length > 64 || listed is! List) {
+      return;
+    }
+    // One set at a time from each device: a new one replaces a stalled one.
+    _abortIncoming(session);
+    if (listed.isEmpty || listed.length > maxFileCount) return;
+    final names = <String>[];
+    final sizes = <int>[];
+    var total = 0;
+    for (final item in listed) {
+      if (item is! Map) return;
+      final name = item['name'];
+      final size = item['size'];
+      if (name is! String || name.isEmpty || name.length > 255) return;
+      if (size is! int || size < 0) return;
+      names.add(name);
+      sizes.add(size);
+      total += size;
+    }
+    if (total > maxFilesBytes || _remoteFiles.isClosed) return;
+    final incoming = _IncomingFiles(
+      id: id,
+      // Two devices may pick the same id; the sender's own id sets them apart.
+      key: '${session.channel.peerId}-$id',
+      sizes: sizes,
+    );
+    session.incoming = incoming;
+    _remoteFiles.add(
+      RemoteFilesBegin(
+        incoming.key,
+        names: names,
+        sizes: sizes,
+        fromName: session.channel.peerName,
+      ),
+    );
+  }
+
+  void _onFilesChunk(_Session session, Map<String, Object?> message) {
+    final incoming = session.incoming;
+    final id = message['id'];
+    final index = message['i'];
+    final data = message['data'];
+    if (incoming == null || id != incoming.id) return;
+    if (index is! int ||
+        index < 0 ||
+        index >= incoming.sizes.length ||
+        data is! String) {
+      _abortIncoming(session);
+      return;
+    }
+    final Uint8List bytes;
+    try {
+      bytes = base64Decode(data);
+    } on FormatException {
+      _abortIncoming(session);
+      return;
+    }
+    incoming.received[index] += bytes.length;
+    // More than was announced is not the file that was announced.
+    if (incoming.received[index] > incoming.sizes[index]) {
+      _abortIncoming(session);
+      return;
+    }
+    if (!_remoteFiles.isClosed) {
+      _remoteFiles.add(RemoteFilesChunk(incoming.key, index, bytes));
+    }
+  }
+
+  // Files that were still arriving will not finish.
+  void _abortIncoming(_Session session) {
+    final incoming = session.incoming;
+    if (incoming == null) return;
+    session.incoming = null;
+    if (!_remoteFiles.isClosed) {
+      _remoteFiles.add(RemoteFilesAborted(incoming.key));
+    }
+  }
+
   String _newDeviceId() => [
     for (var i = 0; i < 16; i++)
       _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -857,6 +1082,19 @@ class _Session {
 
   final SecureChannel channel;
   Duration lastHeard;
+
+  /// The files this device is in the middle of sending us, if any.
+  _IncomingFiles? incoming;
+}
+
+class _IncomingFiles {
+  _IncomingFiles({required this.id, required this.key, required this.sizes})
+    : received = List.filled(sizes.length, 0);
+
+  final String id;
+  final String key;
+  final List<int> sizes;
+  final List<int> received;
 }
 
 class _Heard {

@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -51,6 +52,9 @@ object PhoneEngine {
 
     /** Text that arrived before the Dart side was ready to take it. */
     private val pending = ArrayList<String>()
+
+    /** Sets of files shared to the app before the Dart side was ready. */
+    private val pendingFiles = ArrayList<List<String>>()
 
     /** What was last handed over, so the same copy is not sent twice. */
     private var lastText: String? = null
@@ -157,6 +161,138 @@ object PhoneEngine {
         )
     }
 
+    /**
+     * Takes in files another app shared to this one, to be sent to the other
+     * devices. What is shared is an address that stops working once the
+     * sharing app moves on, so the files are copied into the app's own
+     * folder first, off the main thread.
+     */
+    fun deliverFiles(context: Context, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val app = context.applicationContext
+        ensure(app)
+        Thread {
+            val folder = File(File(app.filesDir, "files"), "shared-${System.currentTimeMillis()}")
+            val copied = ArrayList<String>()
+            try {
+                folder.mkdirs()
+                for ((index, uri) in uris.withIndex()) {
+                    val name = fileName(app, uri) ?: "file-${index + 1}"
+                    var target = File(folder, name)
+                    var copy = 2
+                    while (target.exists()) {
+                        target = File(folder, "${target.nameWithoutExtension} (${copy++}).${target.extension}")
+                    }
+                    app.contentResolver.openInputStream(uri)?.use { input ->
+                        target.outputStream().use { input.copyTo(it) }
+                    } ?: continue
+                    copied.add(target.path)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "a shared file could not be taken in", e)
+            }
+            main.post {
+                if (copied.isEmpty()) return@post
+                Log.i(TAG, "taking in ${copied.size} shared file(s)")
+                if (dartReady) {
+                    channel?.invokeMethod("sharedFiles", copied)
+                } else {
+                    pendingFiles.add(copied)
+                }
+            }
+        }.start()
+    }
+
+    // The name the sharing app gives the file, without any folder.
+    private fun fileName(app: Context, uri: Uri): String? {
+        val shown = try {
+            app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { if (it.moveToFirst()) it.getString(0) else null }
+        } catch (e: Exception) {
+            null
+        }
+        return (shown ?: uri.lastPathSegment)
+            ?.substringAfterLast('/')
+            ?.replace(Regex("[\\\\:*?\"<>|\\x00-\\x1f]"), "_")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && it != "." && it != ".." }
+    }
+
+    // An address another app may read, for each of the app's own files in
+    // [paths]; anything else is left out.
+    private fun shareable(app: Context, paths: List<*>?): List<Uri> =
+        paths.orEmpty().filterIsInstance<String>().mapNotNull { path ->
+            try {
+                val file = File(path)
+                if (!file.isFile || !file.canonicalPath.startsWith(app.filesDir.canonicalPath)) {
+                    null
+                } else {
+                    FileProvider.getUriForFile(app, filesAuthority(app), file)
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+    /** Puts stored files on the clipboard, for apps that take pasted files. */
+    private fun writeClipboardFiles(app: Context, paths: List<*>?): Boolean {
+        val uris = shareable(app, paths)
+        if (uris.isEmpty()) return false
+        return try {
+            val clip = ClipData.newUri(app.contentResolver, "Files", uris.first())
+            uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+            val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(clip)
+            lastWrite = SystemClock.elapsedRealtime()
+            Log.i(TAG, "put ${uris.size} file(s) on the clipboard")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "the files could not be put on the clipboard", e)
+            false
+        }
+    }
+
+    /**
+     * Shows stored files to the user: one file opens in whichever app
+     * handles its kind, with the choice of sending it on; several are
+     * offered to send or save together.
+     */
+    private fun openFiles(app: Context, paths: List<*>?): Boolean {
+        val uris = shareable(app, paths)
+        if (uris.isEmpty()) return false
+        return try {
+            val intent = if (uris.size == 1) {
+                val uri = uris.first()
+                val type = app.contentResolver.getType(uri) ?: "*/*"
+                val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val send = Intent(Intent.ACTION_SEND).setType(type)
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                send.clipData = ClipData.newRawUri(null, uri)
+                Intent.createChooser(view, null)
+                    .putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(send))
+            } else {
+                val send = Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*")
+                    .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                send.clipData = ClipData.newRawUri(null, uris.first()).also { clip ->
+                    uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+                }
+                Intent.createChooser(send, null)
+            }
+            app.startActivity(
+                intent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                ),
+            )
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "the files could not be opened", e)
+            false
+        }
+    }
+
     /** Whether there is anything on the clipboard this app could send. */
     fun clipboardHasContent(app: Context): Boolean = try {
         val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -186,6 +322,13 @@ object PhoneEngine {
                 result.success(ArrayList(pending))
                 pending.clear()
             }
+            "takeSharedFiles" -> {
+                result.success(ArrayList(pendingFiles))
+                pendingFiles.clear()
+            }
+            "writeClipboardFiles" ->
+                result.success(writeClipboardFiles(app, call.arguments as? List<*>))
+            "openFiles" -> result.success(openFiles(app, call.arguments as? List<*>))
             // The clipboard is read and written here and not through Flutter's
             // own channel, which answers only while there is a screen: without
             // one a call to it never returns.

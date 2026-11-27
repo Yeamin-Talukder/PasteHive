@@ -2,6 +2,7 @@ package com.example.pastehive
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,13 +20,33 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         PhoneEngine.screen = WeakReference(this)
         super.onCreate(savedInstanceState)
-        sharedTextOf(intent)?.let { PhoneEngine.deliver(this, it) }
+        takeShared(intent)
     }
 
     // The app was already open when something was shared to it.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        sharedTextOf(intent)?.let { PhoneEngine.deliver(this, it) }
+        takeShared(intent)
+    }
+
+    // Files shared to the app go to the other devices as files; anything
+    // else that was shared is text.
+    private fun takeShared(intent: Intent?) {
+        val files = sharedFilesOf(intent)
+        if (files.isNotEmpty()) {
+            PhoneEngine.deliverFiles(this, files)
+        } else {
+            sharedTextOf(intent)?.let { PhoneEngine.deliver(this, it) }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sharedFilesOf(intent: Intent?): List<Uri> = when (intent?.action) {
+        Intent.ACTION_SEND ->
+            listOfNotNull(intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+        Intent.ACTION_SEND_MULTIPLE ->
+            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+        else -> emptyList()
     }
 
     override fun onDestroy() {

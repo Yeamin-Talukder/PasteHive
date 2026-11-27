@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/file_vault.dart';
 import 'package:pastehive/src/history/image_vault.dart';
 import 'package:pastehive/src/platform/ports.dart';
 import 'package:pastehive/src/app_shell.dart';
@@ -42,6 +43,7 @@ class Computer {
       tray: tray,
       onQuit: () async {},
       images: ImageVault(imageFolder),
+      receivedFiles: FileVault(Directory(path.join(imageFolder.path, 'files'))),
       readRetryDelay: const Duration(milliseconds: 1),
     );
   }
@@ -579,6 +581,137 @@ void main() {
       await settle();
 
       expect(network.links, isEmpty);
+    });
+  });
+
+  group('files', () {
+    /// A file with [length] bytes of recognisable content.
+    File makeFile(Computer computer, String name, int length) {
+      final file = File(path.join(computer.imageFolder.path, 'desk', name))
+        ..parent.createSync(recursive: true);
+      file.writeAsBytesSync(
+        Uint8List.fromList([for (var i = 0; i < length; i++) (i * 7) % 251]),
+      );
+      return file;
+    }
+
+    List<ClipboardEntry> filesOn(Computer computer) => [
+      for (final entry in computer.history.entries)
+        if (entry.kind == EntryKind.files) entry,
+    ];
+
+    test('a file copied on one computer arrives whole on the other, under '
+        'its own name', () async {
+      await pair();
+      // Larger than one message carries, so it crosses in several pieces.
+      final report = makeFile(mac, 'report.pdf', 700 * 1024);
+
+      mac.clipboard.copyFilesFromElsewhere([report.path]);
+      await eventually(() => filesOn(pc).isNotEmpty);
+
+      final arrived = filesOn(pc).single;
+      expect(arrived.source, 'Mac');
+      expect(path.basename(arrived.files.single), 'report.pdf');
+      expect(
+        File(arrived.files.single).readAsBytesSync(),
+        report.readAsBytesSync(),
+      );
+      // It is on the other clipboard, ready to paste.
+      expect(pc.clipboard.writtenFiles.last, arrived.files);
+
+      // And it does not bounce back.
+      await settle();
+      expect(filesOn(mac).single.files, [report.path]);
+      expect(filesOn(mac).single.source, isNull);
+      expect(filesOn(pc), hasLength(1));
+    });
+
+    test('several files copied together arrive together, same names and '
+        'all', () async {
+      await pair();
+      final first = makeFile(mac, 'notes.txt', 10);
+      final second = File(path.join(mac.imageFolder.path, 'other', 'notes.txt'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('a different file');
+      final empty = makeFile(mac, 'empty.bin', 0);
+
+      mac.clipboard.copyFilesFromElsewhere([
+        first.path,
+        second.path,
+        empty.path,
+      ]);
+      await eventually(() => filesOn(pc).isNotEmpty);
+
+      final arrived = filesOn(pc).single.files;
+      expect(arrived.map(path.basename), [
+        'notes.txt',
+        'notes (2).txt',
+        'empty.bin',
+      ]);
+      expect(File(arrived[0]).readAsBytesSync(), first.readAsBytesSync());
+      expect(File(arrived[1]).readAsStringSync(), 'a different file');
+      expect(File(arrived[2]).lengthSync(), 0);
+    });
+
+    test('picking a received file again puts it back on the clipboard '
+        'without sending it round again', () async {
+      await pair();
+      final report = makeFile(mac, 'report.pdf', 2000);
+      mac.clipboard.copyFilesFromElsewhere([report.path]);
+      await eventually(() => filesOn(pc).isNotEmpty);
+      final before = trafficCount();
+
+      pc.shell.copy(filesOn(pc).single);
+      await pc.shell.captured;
+      await settle();
+
+      expect(trafficCount(), before);
+      expect(filesOn(pc).single.source, 'Mac');
+    });
+
+    test('a folder is listed where it was copied but not sent', () async {
+      await pair();
+      final folder = Directory(path.join(mac.imageFolder.path, 'a folder'))
+        ..createSync();
+
+      mac.clipboard.copyFilesFromElsewhere([folder.path]);
+      await eventually(() => filesOn(mac).isNotEmpty);
+      await mac.shell.captured;
+      await settle();
+
+      expect(filesOn(pc), isEmpty);
+    });
+
+    test('nothing is taken in while paused', () async {
+      await pair();
+      pc.history.paused = true;
+      final report = makeFile(mac, 'report.pdf', 2000);
+
+      mac.clipboard.copyFilesFromElsewhere([report.path]);
+      await eventually(() => filesOn(mac).isNotEmpty);
+      await mac.shell.captured;
+      await settle();
+
+      expect(filesOn(pc), isEmpty);
+      expect(pc.clipboard.writtenFiles, isEmpty);
+    });
+
+    test('files of entries that are gone are cleared away', () async {
+      await pair();
+      final report = makeFile(mac, 'report.pdf', 2000);
+      mac.clipboard.copyFilesFromElsewhere([report.path]);
+      await eventually(() => filesOn(pc).isNotEmpty);
+      final kept = File(filesOn(pc).single.files.single);
+      expect(kept.existsSync(), isTrue);
+
+      await pc.shell.removeUnusedImages();
+      expect(kept.existsSync(), isTrue, reason: 'still listed');
+
+      pc.history.remove(filesOn(pc).single.id);
+      await pc.shell.removeUnusedImages();
+      expect(kept.existsSync(), isFalse);
+      // The original on the other computer is never touched.
+      expect(report.existsSync(), isTrue);
     });
   });
 }
