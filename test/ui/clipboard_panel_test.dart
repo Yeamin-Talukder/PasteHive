@@ -4,9 +4,9 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/ui/clipboard_panel.dart';
+import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/ui/clipboard_panel.dart';
 
 import '../fakes.dart';
 

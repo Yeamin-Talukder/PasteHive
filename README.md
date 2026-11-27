@@ -237,7 +237,7 @@ flutter build apk
 ```
 
 The project folder, the Dart package and the binaries are still called
-`synchronize_clipboard`; only the name shown to users is PasteHive.
+`pastehive`; only the name shown to users is PasteHive.
 
 ## For developers
 
@@ -259,7 +259,7 @@ picture of the panel as drawn (`build\smoke.png`, with made-up entries rather
 than your history) and quit:
 
 ```powershell
-$env:SYNC_CLIPBOARD_SMOKE = "$PWD\build\smoke.json"; .\build\windows\x64\runner\Debug\synchronize_clipboard.exe
+$env:SYNC_CLIPBOARD_SMOKE = "$PWD\build\smoke.json"; .\build\windows\x64\runner\Debug\pastehive.exe
 ```
 
 ### How the glass is drawn

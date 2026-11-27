@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/sync/sync_key.dart';
+import 'package:pastehive/src/sync/sync_key.dart';
 
 void main() {
   test('a generated key is 20 characters from the unambiguous alphabet', () {

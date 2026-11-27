@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:synchronize_clipboard/src/sync/network.dart';
-import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
-import 'package:synchronize_clipboard/src/sync/sync_service.dart';
+import 'package:pastehive/src/sync/network.dart';
+import 'package:pastehive/src/sync/sync_ports.dart';
+import 'package:pastehive/src/sync/sync_service.dart';
 
 import 'memory_network.dart';
 import 'sync_service_test.dart' show eventually, pairDevices;

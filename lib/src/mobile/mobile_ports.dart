@@ -27,7 +27,7 @@ class PhoneBridge {
     });
   }
 
-  static const _channel = MethodChannel('synchronize_clipboard/phone');
+  static const _channel = MethodChannel('pastehive/phone');
 
   /// Called with text another app shared to this one while it was running.
   void Function(String text)? onSharedText;

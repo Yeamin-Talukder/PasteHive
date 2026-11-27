@@ -3,14 +3,14 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/platform/ports.dart';
-import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
-import 'package:synchronize_clipboard/src/ui/clipboard_panel.dart';
-import 'package:synchronize_clipboard/src/ui/glass_shell.dart';
-import 'package:synchronize_clipboard/src/ui/panel_scene.dart';
-import 'package:synchronize_clipboard/src/ui/panel_surface.dart';
+import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/platform/ports.dart';
+import 'package:pastehive/src/shell/panel_controller.dart';
+import 'package:pastehive/src/ui/clipboard_panel.dart';
+import 'package:pastehive/src/ui/glass_shell.dart';
+import 'package:pastehive/src/ui/panel_scene.dart';
+import 'package:pastehive/src/ui/panel_surface.dart';
 
 import '../fakes.dart';
 

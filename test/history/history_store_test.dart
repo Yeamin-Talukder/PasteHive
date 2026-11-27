@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
-import 'package:synchronize_clipboard/src/history/history_store.dart';
+import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/history_store.dart';
 
 void main() {
   late Directory directory;

@@ -1,8 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/shell/hot_edge.dart';
-import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
+import 'package:pastehive/src/shell/hot_edge.dart';
+import 'package:pastehive/src/shell/panel_controller.dart';
 
 import '../fakes.dart';
 

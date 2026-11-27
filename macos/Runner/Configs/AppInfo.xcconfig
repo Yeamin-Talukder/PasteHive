@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = synchronize_clipboard
+PRODUCT_NAME = pastehive
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.synchronizeClipboard
+PRODUCT_BUNDLE_IDENTIFIER = com.example.pastehive
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.

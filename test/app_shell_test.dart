@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/app_shell.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/history/history_store.dart';
-import 'package:synchronize_clipboard/src/shell/panel_controller.dart';
-import 'package:synchronize_clipboard/src/sync/sync_ports.dart';
-import 'package:synchronize_clipboard/src/sync/sync_service.dart';
+import 'package:pastehive/src/app_shell.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/history/history_store.dart';
+import 'package:pastehive/src/shell/panel_controller.dart';
+import 'package:pastehive/src/sync/sync_ports.dart';
+import 'package:pastehive/src/sync/sync_service.dart';
 
 import 'fakes.dart';
 import 'sync/memory_network.dart';

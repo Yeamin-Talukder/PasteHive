@@ -1,9 +1,9 @@
 import 'dart:ui' show Color;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_entry.dart';
-import 'package:synchronize_clipboard/src/history/clipboard_history.dart';
-import 'package:synchronize_clipboard/src/history/history_store.dart';
+import 'package:pastehive/src/history/clipboard_entry.dart';
+import 'package:pastehive/src/history/clipboard_history.dart';
+import 'package:pastehive/src/history/history_store.dart';
 
 import '../fakes.dart';
 
