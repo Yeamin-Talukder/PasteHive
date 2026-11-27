@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,58377,e=>{e.q("/PasteHive/_next/static/media/screenshot-dark.1fk5gdhzbjhgq.png")},79163,e=>{e.q("/PasteHive/_next/static/media/screenshot-sync.3p73wh76hp-_q.png")}]);
