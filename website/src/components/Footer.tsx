@@ -79,14 +79,14 @@ export function ClosingCall() {
               </a>
             </div>
             <p className="mt-4 text-[0.82rem] text-faint">
-              No packaged release yet.{" "}
+              Free for Windows, macOS and Android. Or{" "}
               <a
                 href={BUILD_URL}
                 className="text-white/80 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
               >
-                Build from source
-              </a>{" "}
-              until the first one.
+                build it from source
+              </a>
+              .
             </p>
           </div>
         </div>

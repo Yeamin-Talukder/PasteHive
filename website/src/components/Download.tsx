@@ -235,11 +235,13 @@ export function Download() {
           <Info size={18} className="mt-0.5 shrink-0 text-white" />
           <span>
             <strong className="font-semibold text-white">
-              There is no packaged release yet.
+              The apps are not signed by a registered developer.
             </strong>{" "}
-            The download buttons open the project’s releases page, which has
-            nothing to offer for now. When the first release is published its
-            files will be listed there. Until then,{" "}
+            Windows may warn the first time (More info, then Run anyway), and
+            macOS blocks the app until you choose Open Anyway under System
+            Settings, Privacy &amp; Security. On Android, uninstall an older
+            version before installing a new one. The download buttons open
+            the latest release; you can also{" "}
             <a
               href="#build-from-source"
               className="text-white underline decoration-white/40 underline-offset-4 transition-colors hover:decoration-white"

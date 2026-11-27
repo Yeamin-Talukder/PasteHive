@@ -15,12 +15,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Windows" src="https://img.shields.io/badge/Download-Windows-111111?style=for-the-badge"></a>
-  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for macOS" src="https://img.shields.io/badge/Download-macOS-111111?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest"><img alt="Download PasteHive for Android" src="https://img.shields.io/badge/Download-Android-111111?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-windows-x64.zip"><img alt="Download PasteHive for Windows" src="https://img.shields.io/badge/Download-Windows-111111?style=for-the-badge"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-macos.zip"><img alt="Download PasteHive for macOS" src="https://img.shields.io/badge/Download-macOS-111111?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android.apk"><img alt="Download PasteHive for Android" src="https://img.shields.io/badge/Download-Android-111111?style=for-the-badge&logo=android&logoColor=white"></a>
   <img alt="PasteHive for iOS is coming soon" src="https://img.shields.io/badge/iOS-coming%20soon-555555?style=for-the-badge&logo=apple&logoColor=white">
   <br>
-  <sub>The buttons open the <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest">latest release</a>. No release is published yet; until one is, <a href="#build-from-source">build from source</a>.</sub>
+  <sub>The buttons download the newest version from the <a href="https://github.com/Yeamin-Talukder/PasteHive/releases/latest">latest release</a>.</sub>
 </p>
 
 <p align="center">
@@ -147,15 +147,26 @@ on a Pixel.
 
 | Platform | Get it | File |
 | --- | --- | --- |
-| Windows | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | Installer or zip |
-| macOS | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | App bundle |
-| Android | [Latest release](https://github.com/Yeamin-Talukder/PasteHive/releases/latest) | APK |
+| Windows | [PasteHive-windows-x64.zip](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-windows-x64.zip) | Zip of the app's folder |
+| macOS | [PasteHive-macos.zip](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-macos.zip) | Zipped app bundle |
+| Android | [PasteHive-android.apk](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android.apk) | APK |
 | iOS | Coming soon | |
 
-There is no packaged release yet, so the links above have nothing to offer
-for now. When the first release is published its files will be listed there,
-and the download badge at the top of this page will start counting. Until then,
-[build it from source](#build-from-source); it takes one command per platform.
+These links always fetch the newest version; every version and its notes are
+on the [releases page](https://github.com/Yeamin-Talukder/PasteHive/releases).
+
+- **Windows**: unzip and run `pastehive.exe` in the `PasteHive` folder. The
+  app is not code-signed, so SmartScreen may warn the first time: choose
+  **More info**, then **Run anyway**.
+- **macOS**: unzip and move the app to Applications. It is not notarized, so
+  macOS blocks it at first: open **System Settings > Privacy & Security** and
+  choose **Open Anyway**. Pasting needs the Accessibility permission.
+- **Android**: open the APK on the phone and allow the install. Releases are
+  not yet signed with one fixed key, so a new version cannot be installed
+  over an older one: uninstall the old one first (its history and pairing go
+  with it).
+
+Once installed, the app can fetch later versions by itself from **About**.
 
 ## Sync your clipboard between devices
 
