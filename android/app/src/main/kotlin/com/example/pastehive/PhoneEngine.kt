@@ -158,7 +158,7 @@ object PhoneEngine {
     }
 
     /** The text on the clipboard; null when Android will not show it. */
-    private fun readClipboard(app: Context): String? = try {
+    fun readClipboard(app: Context): String? = try {
         val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.primaryClip
             ?.takeIf { it.itemCount > 0 }

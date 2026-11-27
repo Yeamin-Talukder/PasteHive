@@ -1,10 +1,13 @@
 package com.example.pastehive
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
+import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -15,8 +18,8 @@ import android.view.accessibility.AccessibilityEvent
  * them read it from the background. What an accessibility service can see
  * are two signs of a copy: a tap on a button labelled with the system's own
  * word for Copy or Cut, and the small "copied" preview Android shows in the
- * corner afterwards. On either, this opens the invisible capture activity,
- * which may read the clipboard for the instant it is in front.
+ * corner afterwards. On either, it reads the clipboard through a window of
+ * one transparent pixel (see [readClipboard]) and hands the text on.
  *
  * It looks at nothing else: only the label of what was tapped and the name
  * of the window that appeared. It is off until the user switches it on in
@@ -58,17 +61,66 @@ class CopyWatcherService : AccessibilityService() {
         if (now - lastCapture < 700) return
         lastCapture = now
         Log.i(PhoneEngine.TAG, "copy watcher: copy noticed ($sign) in ${event.packageName}")
-        handler.postDelayed({
-            try {
-                startActivity(
-                    Intent(this, CaptureActivity::class.java)
-                        .putExtra(CaptureActivity.EXTRA_QUIET, true)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
-                )
-            } catch (e: Exception) {
-                Log.w(PhoneEngine.TAG, "copy watcher: could not open the capture", e)
+        handler.postDelayed({ readClipboard() }, 250)
+    }
+
+    /**
+     * Reads the clipboard through a window of one transparent pixel.
+     *
+     * Android shows the clipboard only to the app whose window has focus. A
+     * service like this one may put a window of its own over whatever is on
+     * screen; for the instant that window has focus, the clipboard can be
+     * read. Nothing is drawn and no screen is opened, so nothing moves: the
+     * app underneath stays where it is, keyboard included.
+     */
+    private fun readClipboard() {
+        val windows = getSystemService(WINDOW_SERVICE) as WindowManager
+        var finished = false
+        lateinit var probe: View
+        fun finish(text: String?, how: String) {
+            if (finished) return
+            finished = true
+            // Not from inside the window's own focus report: Android is
+            // still using the window at that point and crashes without it.
+            handler.post {
+                try {
+                    windows.removeView(probe)
+                } catch (e: Exception) {
+                    // Already gone.
+                }
             }
-        }, 250)
+            Log.i(PhoneEngine.TAG, "copy watcher: read ${text?.length ?: 0} characters ($how)")
+            if (!text.isNullOrBlank()) PhoneEngine.deliver(this, text, onlyIfNew = true)
+        }
+        probe = object : View(this) {
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (hasWindowFocus) finish(PhoneEngine.readClipboard(this@CopyWatcherService), "focus")
+            }
+        }
+        val params = WindowManager.LayoutParams(
+            1,
+            1,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            // Able to take focus, but not the keyboard's: the keyboard stays
+            // with the app underneath. Touches pass through.
+            WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            windowAnimations = 0
+            title = "PasteHive"
+        }
+        try {
+            windows.addView(probe, params)
+        } catch (e: Exception) {
+            Log.w(PhoneEngine.TAG, "copy watcher: could not look at the clipboard", e)
+            return
+        }
+        // Never linger: if focus is not given, give up.
+        handler.postDelayed({ finish(null, "no focus") }, 1500)
     }
 
     override fun onInterrupt() {}
