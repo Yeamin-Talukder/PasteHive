@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="PasteHive: clipboard history and sync for Windows, macOS and Android, with iOS coming soon" width="100%">
+  <img src="docs/banner.png" alt="PasteHive: clipboard history and sync for Windows, macOS, Android and iOS" width="100%">
 </p>
 
 <h1 align="center">PasteHive: clipboard manager and clipboard sync</h1>
