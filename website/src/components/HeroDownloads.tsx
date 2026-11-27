@@ -1,130 +1,46 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ArrowDownToLine, Star } from "lucide-react";
-import { DOWNLOADS, REPO_API_URL, REPO_URL } from "@/lib/site";
+import {
+  latestOf,
+  totalDownloads,
+  useProject,
+  useVisitorPlatform,
+  type PlatformId,
+} from "@/lib/releases";
+import { DOWNLOADS, REPO_URL } from "@/lib/site";
 import { AndroidIcon, AppleIcon, WindowsIcon } from "./icons";
 
-type Platform = keyof typeof DOWNLOADS;
-
-const ICONS: Record<Platform, ReactNode> = {
+const ICONS: Record<PlatformId, ReactNode> = {
   windows: <WindowsIcon className="h-4 w-4" />,
   macos: <AppleIcon className="h-4 w-4" />,
   android: <AndroidIcon className="h-[18px] w-[18px]" />,
 };
 
-const ORDER: Platform[] = ["windows", "macos", "android"];
-
-/** Which of the three the visitor is on, or null when it is none of them. */
-function detectPlatform(): Platform | null {
-  const agent = navigator.userAgent;
-  if (/Android/i.test(agent)) return "android";
-  if (/iPhone|iPad|iPod/i.test(agent)) return null;
-  if (/Windows/i.test(agent)) return "windows";
-  if (/Macintosh|Mac OS X/i.test(agent)) return "macos";
-  return null;
-}
-
-const never = () => () => {};
-
-interface Counts {
-  stars: number;
-  downloads: number;
-  version: string | null;
-}
-
-const CACHE_KEY = "pastehive-counts";
-const CACHE_MS = 10 * 60 * 1000;
-
-/**
- * Stars and downloads, read from GitHub's public API in the visitor's
- * browser, so the numbers are the real ones at the time of the visit. Kept
- * for ten minutes so that moving around the site does not ask again. If
- * GitHub cannot be reached, the numbers are left out rather than guessed.
- */
-function useCounts() {
-  const [counts, setCounts] = useState<Counts | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async (): Promise<Counts> => {
-      try {
-        const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? "null");
-        if (cached && Date.now() - cached.at < CACHE_MS) return cached.counts;
-      } catch {
-        // No storage, or nothing usable in it: ask GitHub.
-      }
-
-      const [repo, releases] = await Promise.all(
-        [REPO_API_URL, `${REPO_API_URL}/releases?per_page=100`].map(
-          async (url) => {
-            const response = await fetch(url, {
-              headers: { Accept: "application/vnd.github+json" },
-            });
-            if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
-            return response.json();
-          },
-        ),
-      );
-
-      const published = (
-        releases as {
-          draft: boolean;
-          prerelease: boolean;
-          tag_name: string;
-          assets: { name: string; download_count: number }[];
-        }[]
-      ).filter((release) => !release.draft);
-
-      const result: Counts = {
-        stars: repo.stargazers_count,
-        // Every download of an app file, over all releases. The checksum
-        // list is not an install, so it is not counted.
-        downloads: published
-          .flatMap((release) => release.assets)
-          .filter((asset) => asset.name.startsWith("PasteHive-"))
-          .reduce((sum, asset) => sum + asset.download_count, 0),
-        version:
-          published.find((release) => !release.prerelease)?.tag_name ?? null,
-      };
-
-      try {
-        sessionStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({ at: Date.now(), counts: result }),
-        );
-      } catch {
-        // Fine: the next page view asks again.
-      }
-      return result;
-    };
-
-    load()
-      .then((result) => {
-        if (!cancelled) setCounts(result);
-      })
-      .catch(() => {
-        // Offline, or GitHub's hourly limit: show the links without numbers.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return counts;
-}
+const ORDER: PlatformId[] = ["windows", "macos", "android"];
 
 const format = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
 
+/**
+ * The hero's downloads: the latest version for each platform, one click
+ * each, with the stars, the downloads and the version under them. Older
+ * versions and the other Android files are in the Download section.
+ */
 export function HeroDownloads() {
-  // Unknown on the server and on the first paint, so the markup agrees.
-  const platform = useSyncExternalStore(never, detectPlatform, () => null);
-  const counts = useCounts();
+  const platform = useVisitorPlatform();
+  const project = useProject();
+  const counts =
+    project && project !== "unavailable"
+      ? {
+          stars: project.stars,
+          downloads: totalDownloads(project),
+          version: latestOf(project)?.tag ?? null,
+        }
+      : null;
 
   return (
     <>
@@ -181,26 +97,27 @@ export function HeroDownloads() {
             <span aria-hidden="true" className="text-white/25">
               /
             </span>
-            <a
-              href={`${REPO_URL}/releases`}
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
-            >
+            <span className="inline-flex items-center gap-1.5">
               <ArrowDownToLine size={13} className="text-white/80" />
               <span className="font-semibold tabular-nums text-white">
                 {format.format(counts.downloads)}
               </span>{" "}
               {counts.downloads === 1 ? "download" : "downloads"}
-            </a>
-            {counts.version && (
-              <>
-                <span aria-hidden="true" className="text-white/25">
-                  /
-                </span>
-                <span className="font-mono">{counts.version}</span>
-              </>
-            )}
+            </span>
           </>
         )}
+        <span aria-hidden="true" className="text-white/25">
+          /
+        </span>
+        <a
+          href="#versions"
+          className="inline-flex items-center gap-1.5 underline decoration-white/25 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
+        >
+          {counts?.version && (
+            <span className="font-mono no-underline">{counts.version}</span>
+          )}
+          Other versions and files
+        </a>
       </p>
     </>
   );

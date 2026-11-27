@@ -2,10 +2,18 @@
 
 import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Check, Copy, Hammer, Info } from "lucide-react";
-import { BUILD_URL, RELEASES_URL } from "@/lib/site";
+import {
+  ArrowDownToLine,
+  ArrowUpRight,
+  Check,
+  Copy,
+  Hammer,
+  Info,
+} from "lucide-react";
+import { BUILD_URL, DOWNLOADS } from "@/lib/site";
 import { AndroidIcon, AppleIcon, WindowsIcon } from "./icons";
 import { Card, Reveal, Section, SectionHeading } from "./ui";
+import { VersionChooser } from "./VersionChooser";
 
 interface Platform {
   id: string;
@@ -241,8 +249,14 @@ export function Download() {
             macOS blocks the app until you choose Open Anyway under System
             Settings, Privacy &amp; Security. On Android, a copy older than
             1.0.1 has to be uninstalled once before a newer one installs. The
-            download buttons open
-            the latest release; you can also{" "}
+            buttons below download the latest version;{" "}
+            <a
+              href="#versions"
+              className="text-white underline decoration-white/40 underline-offset-4 transition-colors hover:decoration-white"
+            >
+              older versions and the other Android files
+            </a>{" "}
+            are further down. You can also{" "}
             <a
               href="#build-from-source"
               className="text-white underline decoration-white/40 underline-offset-4 transition-colors hover:decoration-white"
@@ -308,14 +322,15 @@ export function Download() {
                     )}
                     {available ? (
                       <a
-                        href={RELEASES_URL}
-                        aria-label={`Get PasteHive for ${platform.name} from the releases page`}
+                        href={DOWNLOADS[platform.id as keyof typeof DOWNLOADS].url}
+                        download
+                        aria-label={`Download the latest PasteHive for ${platform.name}`}
                         className="group flex h-11 items-center justify-between gap-2 rounded-full border border-white/20 bg-white/[0.06] pl-4 pr-3 text-[0.9rem] font-medium transition duration-200 ease-out-soft hover:border-white hover:bg-white hover:text-black active:scale-[0.98]"
                       >
-                        Latest release
-                        <ArrowUpRight
+                        Download latest
+                        <ArrowDownToLine
                           size={16}
-                          className="transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          className="transition-transform duration-200 group-hover:translate-y-0.5"
                         />
                       </a>
                     ) : (
@@ -330,6 +345,10 @@ export function Download() {
           );
         })}
       </div>
+
+      <Reveal className="mt-4">
+        <VersionChooser />
+      </Reveal>
 
       <Reveal className="mt-4">
         <BuildFromSource />
