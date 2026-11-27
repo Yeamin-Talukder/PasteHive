@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pastehive/src/mobile/mobile_ports.dart' show androidAssetFor;
 import 'package:pastehive/src/update/app_version.dart';
 import 'package:pastehive/src/update/github_feed.dart';
 import 'package:pastehive/src/update/installers.dart';
@@ -250,6 +251,14 @@ void main() {
       expect(feed.checks, 1, reason: 'switched off');
       off.dispose();
     });
+  });
+
+  test('a phone takes the release file for its own processor', () {
+    expect(androidAssetFor('arm64-v8a'), 'PasteHive-android.apk');
+    expect(androidAssetFor('armeabi-v7a'), 'PasteHive-android-arm32.apk');
+    expect(androidAssetFor('x86_64'), 'PasteHive-android-x86_64.apk');
+    // Unknown or untold: the file nearly every phone takes.
+    expect(androidAssetFor(''), 'PasteHive-android.apk');
   });
 
   group('swap scripts', () {

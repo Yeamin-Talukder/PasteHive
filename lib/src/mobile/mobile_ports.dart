@@ -130,6 +130,10 @@ class PhoneBridge {
   Future<void> writeClipboard(String text) =>
       _invoke<void>('writeClipboard', text);
 
+  /// The kind of processor this phone has, as Android names it (such as
+  /// `arm64-v8a`); empty when it cannot be told.
+  Future<String> deviceAbi() async => await _invoke<String>('deviceAbi') ?? '';
+
   /// Opens a web address in the phone's browser.
   Future<void> openUrl(String url) => _invoke<void>('openUrl', url);
 
@@ -210,13 +214,19 @@ class PhoneClipboard implements ClipboardPort {
 ///
 /// Android only installs an update signed with the same key as the copy it
 /// replaces. A build signed with a different key is refused by the system.
+///
+/// A release has one APK per kind of processor; the phone takes the one for
+/// its own.
 class AndroidUpdateInstaller implements UpdateInstaller {
-  const AndroidUpdateInstaller(this.bridge);
+  const AndroidUpdateInstaller(this.bridge, {this.abi = 'arm64-v8a'});
 
   final PhoneBridge bridge;
 
+  /// The kind of processor this phone has, as Android names it.
+  final String abi;
+
   @override
-  String get assetName => 'PasteHive-android.apk';
+  String get assetName => androidAssetFor(abi);
 
   @override
   String? get unavailableReason => null;
@@ -242,6 +252,14 @@ class AndroidUpdateInstaller implements UpdateInstaller {
     return false;
   }
 }
+
+/// The release file for a phone whose processor Android calls [abi].
+String androidAssetFor(String abi) => switch (abi) {
+  'armeabi-v7a' || 'armeabi' => 'PasteHive-android-arm32.apk',
+  'x86_64' || 'x86' => 'PasteHive-android-x86_64.apk',
+  // 64-bit ARM: nearly every phone. Also the answer for anything unknown.
+  _ => 'PasteHive-android.apk',
+};
 
 /// There is no pointer to follow on a phone.
 class NoPointer implements PointerPort {

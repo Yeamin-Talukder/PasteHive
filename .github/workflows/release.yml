@@ -10,11 +10,15 @@
 # pre-release. The run analyzes and tests first; if anything fails, nothing
 # is published.
 #
-# The release gets three files with fixed names, so these links always point
-# at the newest one:
+# The release gets files with fixed names, so these links always point at
+# the newest one:
 #   .../releases/latest/download/PasteHive-windows-x64.zip
 #   .../releases/latest/download/PasteHive-macos.zip
-#   .../releases/latest/download/PasteHive-android.apk
+#   .../releases/latest/download/PasteHive-android.apk          (arm64)
+#   .../releases/latest/download/PasteHive-android-arm32.apk
+#   .../releases/latest/download/PasteHive-android-x86_64.apk
+# Android gets one file per kind of processor, each a third of the size of
+# one file holding all three. Nearly every phone takes the first.
 #
 # What these builds are not:
 #   - Windows: not code-signed. SmartScreen warns the first time it is run.
@@ -108,7 +112,7 @@ jobs:
             echo
             echo "- **Windows**: unzip \`PasteHive-windows-x64.zip\` and run \`pastehive.exe\` in the \`PasteHive\` folder. The app is not code-signed, so SmartScreen may warn the first time: choose **More info**, then **Run anyway**."
             echo "- **macOS**: unzip \`PasteHive-macos.zip\` and move the app to Applications. It is not notarized, so macOS blocks it at first: open **System Settings > Privacy & Security** and choose **Open Anyway**. Pasting needs the Accessibility permission."
-            echo "- **Android**: open \`PasteHive-android.apk\` on the phone and allow the install."
+            echo "- **Android**: open \`PasteHive-android.apk\` on the phone and allow the install. It is for phones with a 64-bit ARM processor, which is nearly all of them. For an older 32-bit phone take \`PasteHive-android-arm32.apk\`; for an emulator or an Intel device, \`PasteHive-android-x86_64.apk\`."
             if [ "$ANDROID_SIGNING" != "release" ]; then
               echo "  This APK is signed with a one-off key. If an earlier version is installed, uninstall it first."
             fi

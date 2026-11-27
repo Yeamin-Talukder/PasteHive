@@ -65,7 +65,7 @@ Future<void> runPhoneApp() async {
   shell.updates = UpdateService(
     currentVersion: await runningVersion(),
     feed: GitHubReleaseFeed(kRepository),
-    installer: AndroidUpdateInstaller(bridge),
+    installer: AndroidUpdateInstaller(bridge, abi: await bridge.deviceAbi()),
     store: JsonFileUpdateSettingsStore(
       File(path.join(supportDirectory.path, 'update.json')),
     ),

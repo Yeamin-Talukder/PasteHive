@@ -162,42 +162,56 @@ jobs:
           pub-cache: true
       - run: flutter pub get
 
+      # One APK per kind of processor instead of one holding all three: a
+      # phone only ever uses one, and each is a third of the size.
+      #   PasteHive-android.apk          arm64, every phone of the last years
+      #   PasteHive-android-arm32.apk    older 32-bit phones
+      #   PasteHive-android-x86_64.apk   emulators and Intel devices
       - name: Build
         run: |
           args=()
           [ -n "$BUILD_NAME" ] && args+=("--build-name=$BUILD_NAME")
           [ -n "$BUILD_NUMBER" ] && args+=("--build-number=$BUILD_NUMBER")
-          flutter build apk --release "${args[@]}"
+          flutter build apk --release --split-per-abi "${args[@]}"
 
       - name: Sign
         id: sign
         run: |
-          built=build/app/outputs/flutter-apk/app-release.apk
+          out=build/app/outputs/flutter-apk
+          declare -A names=(
+            [arm64-v8a]=PasteHive-android.apk
+            [armeabi-v7a]=PasteHive-android-arm32.apk
+            [x86_64]=PasteHive-android-x86_64.apk
+          )
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
             # The project signs release builds with the debug key, and every
             # build machine makes its own. Fine for trying the app; not for
             # updates, because Android refuses to install over a different key.
-            cp "$built" PasteHive-android.apk
+            for abi in "${!names[@]}"; do
+              cp "$out/app-$abi-release.apk" "${names[$abi]}"
+            done
             echo "signing=debug" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Android APK is signed with a throwaway debug key::It cannot be installed over an earlier release. Add the ANDROID_KEYSTORE secrets described in release.yml to sign with your own key."
+            echo "::warning title=Android APKs are signed with a throwaway debug key::They cannot be installed over an earlier release. Add the ANDROID_KEYSTORE secrets described in release.yml to sign with your own key."
             exit 0
           fi
           tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           keystore="$RUNNER_TEMP/release.jks"
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
           export KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          "$tools/apksigner" sign \
-            --ks "$keystore" \
-            --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --key-pass env:KEY_PASSWORD \
-            --out PasteHive-android.apk "$built"
+          for abi in "${!names[@]}"; do
+            "$tools/apksigner" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:KEY_PASSWORD \
+              --out "${names[$abi]}" "$out/app-$abi-release.apk"
+            "$tools/apksigner" verify --print-certs "${names[$abi]}" | head -n 2
+          done
           rm -f "$keystore"
-          "$tools/apksigner" verify --print-certs PasteHive-android.apk | head -n 2
           echo "signing=release" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
           name: android
-          path: PasteHive-android.apk
+          path: PasteHive-android*.apk
           if-no-files-found: error

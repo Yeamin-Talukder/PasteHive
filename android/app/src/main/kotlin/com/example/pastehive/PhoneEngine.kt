@@ -315,6 +315,8 @@ object PhoneEngine {
     private fun handle(app: Context, call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "deviceName" -> result.success(deviceName())
+            // Which of a release's files this phone can run.
+            "deviceAbi" -> result.success(Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
             // Also how the Dart side says it is ready: from here on, text is
             // passed straight to it.
             "takeSharedTexts" -> {

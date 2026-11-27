@@ -156,7 +156,7 @@ on a Pixel.
 | --- | --- | --- |
 | Windows | [PasteHive-windows-x64.zip](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-windows-x64.zip) | Zip of the app's folder |
 | macOS | [PasteHive-macos.zip](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-macos.zip) | Zipped app bundle |
-| Android | [PasteHive-android.apk](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android.apk) | APK |
+| Android | [PasteHive-android.apk](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android.apk) | APK for 64-bit ARM phones (nearly all). Older 32-bit phones: [arm32](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android-arm32.apk). Emulators and Intel devices: [x86_64](https://github.com/Yeamin-Talukder/PasteHive/releases/latest/download/PasteHive-android-x86_64.apk) |
 | iOS | Coming soon | |
 
 These links always fetch the newest version; every version and its notes are
