@@ -10,9 +10,10 @@ import 'history/image_vault.dart';
 import 'platform/ports.dart';
 import 'shell/panel_controller.dart';
 import 'sync/sync_service.dart';
+import 'update/update_service.dart';
 
 /// Which of the panel's views is showing.
-enum PanelPage { history, sync }
+enum PanelPage { history, sync, about }
 
 /// The part of the app that keeps working while no window is on screen: it
 /// records what is copied, carries it to and from the other devices, owns the
@@ -55,6 +56,13 @@ class AppShell {
   /// The view the panel shows. It goes back to the list each time the panel
   /// is opened by the gesture.
   final ValueNotifier<PanelPage> page = ValueNotifier(PanelPage.history);
+
+  /// Looks for and installs newer versions; null where the app has no way
+  /// of knowing its own version, as in most tests.
+  UpdateService? updates;
+
+  /// Opens a web address in the browser.
+  void Function(String url) openLink = (_) {};
 
   void Function()? _stopWatchingClipboard;
   StreamSubscription<RemoteClip>? _remoteClips;
@@ -283,8 +291,8 @@ class AppShell {
   }
 
   // Typing a key with the panel closing whenever the pointer drifts off
-  // would be maddening, so the settings view pins the panel open.
-  void _onPageChanged() => panel.holdOpen = page.value == PanelPage.sync;
+  // would be maddening, so the settings and About views pin the panel open.
+  void _onPageChanged() => panel.holdOpen = page.value != PanelPage.history;
 
   /// Deletes stored pictures that no entry refers to any more.
   Future<void> removeUnusedImages() async {

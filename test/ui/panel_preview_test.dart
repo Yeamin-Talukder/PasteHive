@@ -18,11 +18,16 @@ import 'package:pastehive/src/history/clipboard_history.dart';
 import 'package:pastehive/src/platform/ports.dart';
 import 'package:pastehive/src/sync/sync_ports.dart';
 import 'package:pastehive/src/sync/sync_service.dart';
+import 'package:pastehive/src/ui/about_view.dart';
 import 'package:pastehive/src/ui/clipboard_panel.dart';
+import 'package:pastehive/src/update/app_version.dart';
+import 'package:pastehive/src/update/update_ports.dart';
+import 'package:pastehive/src/update/update_service.dart';
 import 'package:pastehive/src/ui/glass_shell.dart';
 import 'package:pastehive/src/ui/sync_settings_view.dart';
 
 import '../fakes.dart';
+import '../update/fake_updates.dart';
 import '../sync/memory_network.dart';
 import '../sync/sync_service_test.dart' show pairDevices;
 
@@ -456,6 +461,37 @@ void main() {
           await other.shutdown();
         });
       });
+
+      for (final brightness in Brightness.values) {
+        testWidgets('about, with an update waiting (${brightness.name})', (
+          tester,
+        ) async {
+          final feed = FakeFeed()
+            ..release = ReleaseInfo(
+              version: const AppVersion(1, 2, 0),
+              pageUrl: 'https://github.com/Yeamin-Talukder/PasteHive/releases',
+            );
+          final updates = UpdateService(
+            currentVersion: const AppVersion(1, 0, 0),
+            feed: feed,
+            installer: FakeInstaller(Directory.systemTemp),
+            store: MemoryUpdateSettingsStore(),
+          );
+          await tester.runAsync(updates.check);
+          await show(
+            tester,
+            (hasMaterial) => AboutView(
+              updates: updates,
+              hasMaterial: hasMaterial,
+              onDone: () {},
+              onOpenLink: (_) {},
+            ),
+            brightness: brightness,
+          );
+          await loadPictures(tester);
+          await capture(tester, 'about_${brightness.name}');
+        });
+      }
     },
   );
 }

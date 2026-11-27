@@ -30,6 +30,8 @@ class ClipboardPanel extends StatefulWidget {
     required this.onDismiss,
     this.sync,
     this.onOpenSync,
+    this.onOpenAbout,
+    this.updateAvailable = false,
     this.pastesOnSelect = false,
     this.touch = false,
     this.clock = DateTime.now,
@@ -56,6 +58,12 @@ class ClipboardPanel extends StatefulWidget {
 
   /// Opens the sync settings.
   final VoidCallback? onOpenSync;
+
+  /// Opens the About view; null leaves its button out.
+  final VoidCallback? onOpenAbout;
+
+  /// Whether a newer version of the app is waiting; marks the About button.
+  final bool updateAvailable;
 
   /// Whether choosing an entry also pastes it into the app the user was
   /// working in; only changes how the key hint reads.
@@ -372,6 +380,8 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
                 paused: widget.history.paused,
                 sync: widget.sync,
                 onOpenSync: widget.onOpenSync,
+                onOpenAbout: widget.onOpenAbout,
+                updateAvailable: widget.updateAvailable,
                 selectVerb: widget.pastesOnSelect ? 'Paste' : 'Copy',
                 showKeyHints: !widget.touch,
               ),
@@ -1353,6 +1363,8 @@ class _Footer extends StatelessWidget {
     required this.paused,
     required this.sync,
     required this.onOpenSync,
+    required this.onOpenAbout,
+    required this.updateAvailable,
     required this.selectVerb,
     required this.showKeyHints,
   });
@@ -1368,6 +1380,8 @@ class _Footer extends StatelessWidget {
   final bool showKeyHints;
   final SyncSummary? sync;
   final VoidCallback? onOpenSync;
+  final VoidCallback? onOpenAbout;
+  final bool updateAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -1402,6 +1416,39 @@ class _Footer extends StatelessWidget {
               )
             else
               const SizedBox(width: 6),
+            if (onOpenAbout != null) ...[
+              const SizedBox(width: 4),
+              // A dot when a newer version is waiting; the label says so too.
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  PanelIconButton(
+                    icon: CupertinoIcons.info_circle,
+                    label: updateAvailable
+                        ? 'About PasteHive (update available)'
+                        : 'About PasteHive',
+                    palette: palette,
+                    size: 26,
+                    onPressed: onOpenAbout!,
+                  ),
+                  if (updateAvailable)
+                    Positioned(
+                      top: 3,
+                      right: 3,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: palette.accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(width: 10),
             Expanded(
               child: ExcludeSemantics(

@@ -13,11 +13,13 @@ import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.core.content.FileProvider
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.lang.ref.WeakReference
 
 /**
@@ -129,6 +131,15 @@ object PhoneEngine {
                 writeClipboard(app, call.arguments as? String ?: "")
                 result.success(null)
             }
+            "openUrl" -> {
+                val url = call.arguments as? String
+                // Only ever a web address.
+                if (url != null && url.startsWith("https://")) {
+                    open(app, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+                result.success(null)
+            }
+            "installApk" -> result.success(installApk(app, call.arguments as? String))
             "autoCopyOn" -> result.success(autoCopyOn(app))
             "openAutoCopySettings" -> {
                 open(app, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -178,6 +189,32 @@ object PhoneEngine {
             lastWrite = SystemClock.elapsedRealtime()
         } catch (e: Exception) {
             Log.w(TAG, "the clipboard could not be written", e)
+        }
+    }
+
+    /**
+     * Hands a downloaded update to Android's installer, which shows the
+     * user what is about to be installed and asks them to confirm. The
+     * first time, Android first asks them to let this app install apps.
+     */
+    private fun installApk(app: Context, path: String?): Boolean {
+        if (path == null) return false
+        return try {
+            val file = File(path)
+            // Only a file this app downloaded itself, into its own cache.
+            if (!file.canonicalPath.startsWith(app.cacheDir.canonicalPath)) return false
+            val uri = FileProvider.getUriForFile(app, "${app.packageName}.updates", file)
+            app.startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    ),
+            )
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "the update could not be handed to the installer", e)
+            false
         }
     }
 

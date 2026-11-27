@@ -8,11 +8,17 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/painting.dart' show EdgeInsets;
 import 'package:flutter/services.dart';
 
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+
 import '../platform/ports.dart';
+import '../update/update_ports.dart';
+import '../update/update_service.dart';
 
 /// The app's own bit of Android code, reached over a method channel: the
 /// phone's name, the notification that keeps sync alive, and text handed
@@ -74,6 +80,14 @@ class PhoneBridge {
   Future<void> writeClipboard(String text) =>
       _invoke<void>('writeClipboard', text);
 
+  /// Opens a web address in the phone's browser.
+  Future<void> openUrl(String url) => _invoke<void>('openUrl', url);
+
+  /// Hands a downloaded APK to Android's installer, which asks the user to
+  /// confirm. False when Android would not take it.
+  Future<bool> installApk(String path) async =>
+      await _invoke<bool>('installApk', path) ?? false;
+
   /// Shows the notification that lets sync keep running while the app is
   /// not on screen, or takes it down.
   Future<void> setKeepAlive(bool on) =>
@@ -131,6 +145,45 @@ class PhoneClipboard implements ClipboardPort {
 
   @override
   bool writeFiles(List<String> paths) => false;
+}
+
+/// Android: the release is an APK, handed to the system's installer. The
+/// user confirms there; the first time, Android also asks them to allow
+/// PasteHive to install apps.
+///
+/// Android only installs an update signed with the same key as the copy it
+/// replaces. A build signed with a different key is refused by the system.
+class AndroidUpdateInstaller implements UpdateInstaller {
+  const AndroidUpdateInstaller(this.bridge);
+
+  final PhoneBridge bridge;
+
+  @override
+  String get assetName => 'PasteHive-android.apk';
+
+  @override
+  String? get unavailableReason => null;
+
+  @override
+  Future<Directory> downloadDirectory() async {
+    final folder = Directory(
+      path.join((await getTemporaryDirectory()).path, 'updates'),
+    );
+    await folder.create(recursive: true);
+    return folder;
+  }
+
+  @override
+  Future<bool> install(File file) async {
+    if (!await bridge.installApk(file.path)) {
+      throw const UpdateException(
+        'Android would not open the update. Download it from its page.',
+      );
+    }
+    // The system's installer takes it from here; the app keeps running
+    // until Android replaces it.
+    return false;
+  }
 }
 
 /// There is no pointer to follow on a phone.

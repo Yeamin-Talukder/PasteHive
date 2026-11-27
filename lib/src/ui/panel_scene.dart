@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
 import '../app_shell.dart' show PanelPage;
+import '../update/update_service.dart';
+import 'about_view.dart';
 import '../history/clipboard_entry.dart';
 import '../history/clipboard_history.dart';
 import '../platform/ports.dart';
@@ -36,6 +38,8 @@ class PanelScene extends StatefulWidget {
     this.sync,
     this.page,
     this.onSendHistory,
+    this.updates,
+    this.onOpenLink,
     this.prepareBackdrop = _blur,
     this.clock = DateTime.now,
   });
@@ -52,6 +56,12 @@ class PanelScene extends StatefulWidget {
 
   /// Sends this device's history to the connected devices.
   final VoidCallback? onSendHistory;
+
+  /// The app's updates, when it has them; with it the panel offers About.
+  final UpdateService? updates;
+
+  /// Opens a web address in the browser.
+  final ValueChanged<String>? onOpenLink;
 
   /// Replaceable so tests need not wait for real image work.
   final BackdropPreparer prepareBackdrop;
@@ -236,9 +246,10 @@ class _PanelSceneState extends State<PanelScene>
     final sync = widget.sync;
     final page = widget.page;
     if (sync == null || page == null) return _buildList(null, null);
+    final updates = widget.updates;
 
     return ListenableBuilder(
-      listenable: Listenable.merge([sync, page]),
+      listenable: Listenable.merge([sync, page, updates]),
       builder: (context, _) => AnimatedSwitcher(
         duration: _reduceMotion
             ? Duration.zero
@@ -260,12 +271,23 @@ class _PanelSceneState extends State<PanelScene>
             onSendHistory: widget.onSendHistory,
             onDone: () => page.value = PanelPage.history,
           ),
+          PanelPage.about when updates != null => AboutView(
+            key: const ValueKey(PanelPage.about),
+            updates: updates,
+            hasMaterial: _hasMaterial,
+            onOpenLink: widget.onOpenLink ?? (_) {},
+            onDone: () => page.value = PanelPage.history,
+          ),
+          // Nothing to show without updates; the list has no button for it.
+          PanelPage.about => const SizedBox.shrink(),
         },
       ),
     );
   }
 
   Widget _buildList(SyncSummary? summary, VoidCallback? onOpenSync) {
+    final page = widget.page;
+    final updates = widget.updates;
     return ClipboardPanel(
       history: widget.history,
       reveal: _reveal,
@@ -275,6 +297,10 @@ class _PanelSceneState extends State<PanelScene>
       onDismiss: widget.controller.dismiss,
       sync: summary,
       onOpenSync: onOpenSync,
+      onOpenAbout: page == null || updates == null
+          ? null
+          : () => page.value = PanelPage.about,
+      updateAvailable: updates?.hasUpdate ?? false,
       pastesOnSelect: widget.controller.canPaste,
       clock: widget.clock,
     );

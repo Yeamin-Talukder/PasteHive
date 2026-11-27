@@ -12,6 +12,11 @@ import '../history/image_vault.dart';
 import '../shell/panel_controller.dart';
 import '../sync/network.dart';
 import '../sync/sync_service.dart';
+import '../update/app_info.dart';
+import '../update/github_feed.dart';
+import '../update/running_version.dart';
+import '../update/update_ports.dart';
+import '../update/update_service.dart';
 import 'mobile_app.dart';
 import 'mobile_ports.dart';
 
@@ -51,6 +56,16 @@ Future<void> runPhoneApp() async {
   );
   unawaited(shell.removeUnusedImages());
 
+  shell.openLink = bridge.openUrl;
+  shell.updates = UpdateService(
+    currentVersion: await runningVersion(),
+    feed: GitHubReleaseFeed(kRepository),
+    installer: AndroidUpdateInstaller(bridge),
+    store: JsonFileUpdateSettingsStore(
+      File(path.join(supportDirectory.path, 'update.json')),
+    ),
+  );
+
   // Text handed over with Share, or picked from the text-selection menu, is
   // treated as copied: the system does not let the app see a copy made in
   // another app while it is in the background, so this is the way in.
@@ -64,6 +79,7 @@ Future<void> runPhoneApp() async {
   runApp(PhoneApp(shell: shell, bridge: bridge));
   await shell.start();
   keepAlive();
+  unawaited(shell.updates?.start());
 
   (await bridge.takeSharedTexts()).forEach(shell.addCopied);
 }

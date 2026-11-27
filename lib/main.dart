@@ -18,6 +18,12 @@ import 'src/shell/panel_controller.dart';
 import 'src/sync/network.dart';
 import 'src/sync/sync_ports.dart';
 import 'src/sync/sync_service.dart';
+import 'src/update/app_info.dart';
+import 'src/update/github_feed.dart';
+import 'src/update/installers.dart';
+import 'src/update/running_version.dart';
+import 'src/update/update_ports.dart';
+import 'src/update/update_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,6 +91,19 @@ Future<void> main() async {
     captureAtLaunch: !checking,
   );
   shell.trace = trace;
+  shell.openLink = openLinkOnDesktop;
+  shell.updates = UpdateService(
+    currentVersion: await runningVersion(),
+    feed: GitHubReleaseFeed(kRepository),
+    installer: desktopInstaller() ?? const NoUpdateInstaller(),
+    // A self-check keeps nothing and never goes on the network.
+    store: checking
+        ? MemoryUpdateSettingsStore()
+        : JsonFileUpdateSettingsStore(
+            File(path.join(supportDirectory.path, 'update.json')),
+          ),
+    quit: shell.quit,
+  );
   // Pictures whose entries are gone (deleted, or pushed out by newer ones).
   unawaited(shell.removeUnusedImages());
 
@@ -93,6 +112,7 @@ Future<void> main() async {
   trace('app running');
   await shell.start();
   trace('shell started: panel=${shell.panelReady} tray=${shell.trayReady}');
+  if (!checking) unawaited(shell.updates?.start());
 
   if (smokePath != null) {
     unawaited(

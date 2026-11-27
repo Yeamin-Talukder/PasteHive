@@ -31,6 +31,8 @@ class ClipboardApp extends StatelessWidget {
         sync: shell.sync,
         page: shell.page,
         onSendHistory: shell.shareHistory,
+        updates: shell.updates,
+        onOpenLink: shell.openLink,
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
+import '../ui/about_view.dart';
 import '../ui/clipboard_panel.dart';
 import '../ui/panel_scene.dart' show syncSummaryOf;
 import '../ui/sync_settings_view.dart';
@@ -83,7 +84,11 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
             color: dark ? const Color(0xFF1E1E22) : const Color(0xFFF5F5F7),
             child: SafeArea(
               child: ListenableBuilder(
-                listenable: Listenable.merge([shell.sync, shell.page]),
+                listenable: Listenable.merge([
+                  shell.sync,
+                  shell.page,
+                  shell.updates,
+                ]),
                 builder: (context, _) => AnimatedSwitcher(
                   duration: MediaQuery.disableAnimationsOf(context)
                       ? Duration.zero
@@ -103,6 +108,10 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
                       onDismiss: () {},
                       sync: syncSummaryOf(shell.sync),
                       onOpenSync: () => shell.page.value = PanelPage.sync,
+                      onOpenAbout: shell.updates == null
+                          ? null
+                          : () => shell.page.value = PanelPage.about,
+                      updateAvailable: shell.updates?.hasUpdate ?? false,
                       clock: widget.clock,
                     ),
                     PanelPage.sync => SyncSettingsView(
@@ -115,6 +124,14 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
                       onOpenAppInfo: widget.bridge?.openAppInfo,
                       onDone: () => shell.page.value = PanelPage.history,
                     ),
+                    PanelPage.about when shell.updates != null => AboutView(
+                      key: const ValueKey(PanelPage.about),
+                      updates: shell.updates!,
+                      hasMaterial: false,
+                      onOpenLink: shell.openLink,
+                      onDone: () => shell.page.value = PanelPage.history,
+                    ),
+                    PanelPage.about => const SizedBox.shrink(),
                   },
                 ),
               ),

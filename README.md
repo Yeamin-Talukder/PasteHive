@@ -105,6 +105,18 @@ other on your Wi-Fi or wired network and talk directly, encrypted.
 - Light and dark appearance, an opaque fallback when more contrast is
   requested, and no motion when reduced motion is on.
 
+**About and updates**
+
+- The ⓘ button at the bottom of the panel opens **About**: the version you
+  are running, the developer, and links to the website, the source code, the
+  issue tracker and the license.
+- PasteHive looks for a newer release once a day (it can be switched off) and
+  marks the ⓘ button when there is one. **Download and Install** fetches it,
+  checks it against the release's published checksum, and installs it:
+  Windows and macOS replace the app and start it again, Android hands the
+  download to the system installer. Nothing is installed without you pressing
+  the button.
+
 ## Platforms
 
 | Platform | What you get | Status |
@@ -195,6 +207,12 @@ nothing is pasted there; the entry is still on the clipboard.
 
 - **No cloud, no account, no telemetry.** Your clipboard goes only to devices
   you have accepted, directly over your own network.
+- **One request to GitHub a day, for updates.** To learn whether a newer
+  version exists, the app asks GitHub's public API for the latest release of
+  this repository. The request carries nothing about you, your device or
+  your clipboard (GitHub sees your network address, as any website does).
+  Switch **Check Automatically** off in About to stop it; a download from
+  GitHub happens only when you press **Download and Install**.
 - **Encrypted in transit.** Each connection does a fresh X25519 key exchange,
   derives its keys from that and the group's key together (HKDF-SHA256), and
   encrypts every message with ChaCha20-Poly1305. A device without the group's
@@ -319,6 +337,8 @@ The two desktop systems need different approaches.
 | `lib/src/sync/` | Group key, encrypted channel, the sync service, and `network.dart` (real UDP and TCP) |
 | `lib/src/ui/` | The panel, its animation, and the sync settings view |
 | `lib/src/mobile/` | The Android app |
+| `lib/src/update/` | App details, the release check, and the per-platform installers |
+| `tool/` | `generate_app_icons.dart` and `generate_tray_icons.dart` write every icon from `design/logo/` |
 | `lib/src/app_shell.dart` | Ties capture, tray and panel together |
 | `design/logo/` | Logo sources, icon exports and the banner |
 | `website/` | The [website](https://yeamin-talukder.github.io/PasteHive/), published by GitHub Actions |
