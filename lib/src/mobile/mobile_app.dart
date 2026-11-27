@@ -4,6 +4,7 @@ import '../app_shell.dart';
 import '../ui/clipboard_panel.dart';
 import '../ui/panel_scene.dart' show syncSummaryOf;
 import '../ui/sync_settings_view.dart';
+import 'mobile_ports.dart';
 
 /// The phone app: the same list and the same sync view as on a computer,
 /// filling the screen instead of dropping from its top edge.
@@ -12,9 +13,17 @@ import '../ui/sync_settings_view.dart';
 /// each time the app comes to the front it looks at the clipboard and
 /// records (and sends on) whatever is new there.
 class PhoneApp extends StatefulWidget {
-  const PhoneApp({super.key, required this.shell, this.clock = DateTime.now});
+  const PhoneApp({
+    super.key,
+    required this.shell,
+    this.bridge,
+    this.clock = DateTime.now,
+  });
 
   final AppShell shell;
+
+  /// The app's Android side; null where there is none, as in a test.
+  final PhoneBridge? bridge;
   final DateTime Function() clock;
 
   @override
@@ -22,6 +31,8 @@ class PhoneApp extends StatefulWidget {
 }
 
 class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
+  bool _autoCopyOn = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +50,10 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    // The user may be coming back from switching the service on or off.
+    widget.bridge?.autoCopyOn().then((on) {
+      if (mounted && on != _autoCopyOn) setState(() => _autoCopyOn = on);
+    });
     // Android hands over the clipboard only once the app's window has the
     // user's attention, which is a moment after it reports being resumed.
     // Asking again a little later costs nothing: the same text is not
@@ -95,6 +110,8 @@ class _PhoneAppState extends State<PhoneApp> with WidgetsBindingObserver {
                       sync: shell.sync,
                       hasMaterial: false,
                       onSendHistory: shell.shareHistory,
+                      autoCopyOn: widget.bridge == null ? null : _autoCopyOn,
+                      onOpenAutoCopy: widget.bridge?.openAutoCopySettings,
                       onDone: () => shell.page.value = PanelPage.history,
                     ),
                   },

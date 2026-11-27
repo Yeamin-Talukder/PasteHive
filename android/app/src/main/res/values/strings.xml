@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="copy_watcher_label">PasteHive: send copies automatically</string>
+    <string name="copy_watcher_summary">Sends what you copy to your other devices</string>
+    <string name="copy_watcher_description">When you tap Copy or Cut in any app, PasteHive sends the copied text to your other devices, so you do not have to open PasteHive or tap Send clipboard. It only notices that Copy or Cut was tapped; it does not read your screen. To read the clipboard, PasteHive comes to the front for an instant, which can close the keyboard.</string>
+</resources>

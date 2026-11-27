@@ -15,12 +15,21 @@ class SyncSettingsView extends StatefulWidget {
     required this.hasMaterial,
     required this.onDone,
     this.onSendHistory,
+    this.autoCopyOn,
+    this.onOpenAutoCopy,
   });
 
   final SyncService sync;
 
   /// Sends this device's history to the connected devices now.
   final VoidCallback? onSendHistory;
+
+  /// On a phone: whether copies are picked up without the app being opened.
+  /// Null where that question does not arise (a computer sees every copy).
+  final bool? autoCopyOn;
+
+  /// Opens the system setting that switches [autoCopyOn].
+  final VoidCallback? onOpenAutoCopy;
 
   /// Whether something translucent is behind this widget.
   final bool hasMaterial;
@@ -76,6 +85,11 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
                             const SizedBox(height: 22),
                             _SectionLabel('History', palette: palette),
                             _buildHistory(palette),
+                          ],
+                          if (widget.autoCopyOn != null) ...[
+                            const SizedBox(height: 22),
+                            _SectionLabel('This Phone', palette: palette),
+                            _buildAutoCopy(palette),
                           ],
                           if (sync.hasKey) ...[
                             const SizedBox(height: 22),
@@ -402,6 +416,60 @@ class _SyncSettingsViewState extends State<SyncSettingsView> {
                       onSend();
                       setState(() => _historySent = true);
                     },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutoCopy(PanelPalette palette) {
+    final on = widget.autoCopyOn ?? false;
+    return _Card(
+      palette: palette,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                on
+                    ? CupertinoIcons.checkmark_circle_fill
+                    : CupertinoIcons.circle,
+                size: 14,
+                color: on ? palette.positive : palette.secondaryLabel,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  on
+                      ? 'Copies Are Sent Automatically'
+                      : 'Send Copies Automatically',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            on
+                ? 'When you tap Copy or Cut in any app, the text goes to '
+                      'your other devices. Switch it off in Accessibility '
+                      'settings.'
+                : 'Android only lets an app see a copy while that app is '
+                      'open. With the PasteHive accessibility service on, '
+                      'tapping Copy or Cut in any app sends the text by '
+                      'itself. It only notices the tap; it does not read '
+                      'your screen.',
+            style: TextStyle(fontSize: 11, color: palette.secondaryLabel),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PanelButton(
+              label: 'Open Accessibility Settings',
+              palette: palette,
+              onPressed: widget.onOpenAutoCopy,
             ),
           ),
         ],

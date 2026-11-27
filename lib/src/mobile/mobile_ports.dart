@@ -49,6 +49,15 @@ class PhoneBridge {
   /// handed over once.
   Future<String?> takeSharedText() => _invoke<String>('takeSharedText');
 
+  /// Whether the user has switched on, in Android's accessibility settings,
+  /// the service that notices a tap on Copy and sends the clipboard by
+  /// itself.
+  Future<bool> autoCopyOn() async => await _invoke<bool>('autoCopyOn') ?? false;
+
+  /// Opens Android's accessibility settings, where that service is switched
+  /// on or off.
+  Future<void> openAutoCopySettings() => _invoke<void>('openAutoCopySettings');
+
   /// Shows the notification that lets sync keep running while the app is
   /// not on screen, or takes it down.
   Future<void> setKeepAlive(bool on) =>

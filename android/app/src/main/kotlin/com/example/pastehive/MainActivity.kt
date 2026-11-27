@@ -1,12 +1,14 @@
 package com.example.pastehive
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -45,6 +47,11 @@ class MainActivity : FlutterActivity() {
                     "takeSharedText" -> {
                         result.success(pendingText)
                         pendingText = null
+                    }
+                    "autoCopyOn" -> result.success(autoCopyOn())
+                    "openAutoCopySettings" -> {
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(null)
                     }
                     "startKeepAlive" -> {
                         startKeepAlive()
@@ -91,6 +98,18 @@ class MainActivity : FlutterActivity() {
             else -> null
         }
         return text?.takeIf { it.isNotBlank() }
+    }
+
+    /** Whether the user has switched the copy watcher on in Android's settings. */
+    private fun autoCopyOn(): Boolean {
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        val mine = ComponentName(this, CopyWatcherService::class.java)
+        return enabled.split(':').any {
+            ComponentName.unflattenFromString(it) == mine
+        }
     }
 
     private fun deviceName(): String {

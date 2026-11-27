@@ -61,7 +61,7 @@ Future<void> runPhoneApp() async {
   void keepAlive() => unawaited(bridge.setKeepAlive(sync.enabled));
   sync.addListener(keepAlive);
 
-  runApp(PhoneApp(shell: shell));
+  runApp(PhoneApp(shell: shell, bridge: bridge));
   await shell.start();
   keepAlive();
 

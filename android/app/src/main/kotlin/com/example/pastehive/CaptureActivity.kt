@@ -16,6 +16,14 @@ import android.widget.Toast
  * notification's "Send clipboard" button and the quick-settings tile open.
  */
 class CaptureActivity : Activity() {
+    companion object {
+        /**
+         * Set when nobody asked for this capture by hand (a copy was noticed):
+         * then it says nothing, whatever it finds.
+         */
+        const val EXTRA_QUIET = "quiet"
+    }
+
     private var done = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,11 +43,16 @@ class CaptureActivity : Activity() {
             ?.getItemAt(0)
             ?.coerceToText(this)
             ?.toString()
+        val quiet = intent?.getBooleanExtra(EXTRA_QUIET, false) == true
         if (text.isNullOrBlank()) {
-            Toast.makeText(this, "Nothing on the clipboard to send", Toast.LENGTH_SHORT).show()
+            if (!quiet) {
+                Toast.makeText(this, "Nothing on the clipboard to send", Toast.LENGTH_SHORT).show()
+            }
         } else {
             deliver(text)
-            Toast.makeText(this, "Sent to your devices", Toast.LENGTH_SHORT).show()
+            if (!quiet) {
+                Toast.makeText(this, "Sent to your devices", Toast.LENGTH_SHORT).show()
+            }
         }
         finish()
         overridePendingTransition(0, 0)
